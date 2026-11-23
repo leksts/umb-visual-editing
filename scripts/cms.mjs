@@ -1,5 +1,5 @@
 // Start de Umbraco-site (bouwt eerst). Gebruikt door `npm run cms`, `npm run dev` en Playwright (webServer).
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -14,7 +14,10 @@ const child = spawn(
 		env: { ASPNETCORE_ENVIRONMENT: 'Development', DOTNET_CLI_TELEMETRY_OPTOUT: '1', ...process.env },
 	},
 );
-const stop = () => child.kill();
+const stop = () => {
+	if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+	else child.kill();
+};
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
 child.on('exit', (code) => process.exit(code ?? 0));

@@ -1,6 +1,6 @@
 # PLAN – Visual Editing PoC voor headless Umbraco 18
 
-Status: fase 0 (verkenning). Antwoorden zijn gebaseerd op de broncode van Umbraco **18.3.2** (tag `release-18.3.2` van
+Status: opgesteld in fase 0; bijgewerkt na fase 4 (bevestigingen uit spikes staan in DECISIONS.md D2, D14–D17). Antwoorden zijn gebaseerd op de broncode van Umbraco **18.3.2** (tag `release-18.3.2` van
 `github.com/umbraco/Umbraco-CMS`, lokaal verkend) en de documentatie op `docs.umbraco.com/umbraco-cms/18.latest/`.
 Waar een antwoord nog niet met een draaiende spike is bevestigd, staat dat erbij. In `DECISIONS.md` staat per keuze de
 uiteindelijke bevestiging.
@@ -78,7 +78,7 @@ https://learn.microsoft.com/dotnet/standard/serialization/system-text-json/custo
   Bron: `examples/workspace-view-hint/index.ts`, doc https://docs.umbraco.com/umbraco-cms/18.latest/customizing/extending-overview/extension-types/workspaces/workspace-views
 - Document-key: `UMB_DOCUMENT_WORKSPACE_CONTEXT` (`unique`-observable) uit `@umbraco-cms/backoffice/document`.
 - Culture: de view zit binnen de variant van de split-view, dus `UMB_PROPERTY_DATASET_CONTEXT.getVariantId().culture`
-  (null = invariant). Te bevestigen in de spike.
+  (null = invariant). Bevestigd voor invariant content.
 - Preview-URL: de Management API-endpoint `GET /umbraco/management/api/v1/document/{id}/preview-url?providerAlias=…&culture=…`
   (`DocumentPreviewUrlController`), in de client beschikbaar als `DocumentService.getDocumentByIdPreviewUrl` uit
   `@umbraco-cms/backoffice/external/backend-api` (zo gebruikt door `UmbPreviewRepository`). Dat geeft de URL van de
@@ -239,9 +239,9 @@ scripts/                        dev-/test-orchestratie (één commando start all
 
 1. **Interne DOM van de backoffice** voor focus op een property (`umb-property`, shadow roots) en voor block-markering.
    Geen publieke API, dus het kan per minor-versie breken. Daarom geïsoleerd in één functie met fallback naar alleen de tab.
-2. **Hergebruik van `umb-content-workspace-view-edit`** (spike): als de standaard editor naast de iframe in de eigen
-   view kan worden gerenderd, is dat de beste UX. Dat element wordt niet geëxporteerd en is dus interne API. Fallback:
-   naar de standaard Content-view navigeren en bij terugkeer de scrollpositie herstellen.
+2. **Standaard editor naast de iframe** (spike, opgelost): de tag `umb-content-workspace-view-edit` direct renderen
+   werkte niet (lazy gedefinieerd). Via het manifest van de Content-view en `createExtensionElement` werkt het wel, met
+   alleen publieke API (DECISIONS.md D15).
 3. **Property-caching van block-elementen**: metadata nooit aan block-`IApiElement`-instanties hangen (mogelijk gedeeld
    tussen requests). Daarom berekenen we alles op documentniveau.
 4. **OpenAPI-schema**: de JSON-modifier kan `editMetadata` als optioneel veld in het Delivery API-schema laten verschijnen.
@@ -251,8 +251,9 @@ scripts/                        dev-/test-orchestratie (één commando start all
    interne links en een korte levensduur van het token.
 7. **Element Picker / Library-elementen** (nieuw in v18): vergen een andere navigatie (element-workspace). Buiten de seed.
 8. **Scroll-herstel na herladen** kan verspringen door afbeeldingen die later laden. Daarom herstellen we opnieuw na `load`.
-9. **Versies**: Astro 7 en Vite 8 zijn nieuw. De Astro-Vue-integratie moet SSR zonder hydration voor niet-interactieve
-   componenten blijven ondersteunen (te verifiëren in fase 1).
+9. **Versies**: Astro 7 en Vite 8 zijn nieuw. SSR zonder hydration voor niet-interactieve Vue-componenten werkt
+   (fase 1-test: precies één `astro-island`).
+11. **Login over HTTP** (ontdekt in fase 4): OpenIddict weigert HTTP tenzij `Global:UseHttps=false` (DECISIONS.md D14).
 10. **Schijfruimte** op de ontwikkelmachine (al eens 0 MB vrij): de build-artefacten zo klein mogelijk houden.
 
 ## 6. Fasering en eindstrepen

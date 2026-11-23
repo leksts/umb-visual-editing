@@ -29,8 +29,15 @@ const procs = [
 console.log('\nCMS:      http://localhost:17575/umbraco  (editor@visualediting.test / VisualEditing!2026)');
 console.log('Frontend: http://localhost:4321\n');
 
+let stopping = false;
 function shutdown() {
-	for (const p of procs) if (!p.killed) p.kill();
+	if (stopping) return;
+	stopping = true;
+	// Op Windows stopt kill() bij shell: true alleen de shell; taskkill /T stopt de hele procesboom (dotnet, astro).
+	for (const p of procs) {
+		if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(p.pid), '/T', '/F'], { stdio: 'ignore' });
+		else p.kill();
+	}
 	process.exit(0);
 }
 process.on('SIGINT', shutdown);

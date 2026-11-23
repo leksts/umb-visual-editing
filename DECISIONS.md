@@ -18,6 +18,9 @@ Elke beslissing: wat, waarom, alternatieven, bron. Bronpaden verwijzen naar de U
 - **Alternatieven**: (a) subclass van `ApiContentResponse`: werkt niet bij serialisatie via het interface-type, en polymorfisme
   aanzetten voegt `$type` toe; (b) metadata in `properties`: verandert de content-structuur; (c) response-header: te klein,
   en niet per item bij queries; (d) eigen controller/endpoint: dupliceert routing, start-item en culture-logica.
+- **Bevestigd (fase 3)**: werkt voor `/item/{id}`, `/item/{path}`, `/items` en de query-endpoint (`/content`, met
+  serialisatie via het interface-type). Integratietests vergelijken byte voor byte met een baseline die is opgenomen met de
+  extensie uitgeschakeld.
 - **Bron**: `src/Umbraco.Core/DeliveryApi/ApiContentResponseBuilder.cs`, `ApiContentBuilderBase.cs`,
   `src/Umbraco.Infrastructure/Serialization/ContentJsonTypeResolverBase.cs`,
   `src/Umbraco.Cms.Api.Delivery/DependencyInjection/UmbracoBuilderExtensions.cs` (r. 94-105);
@@ -89,3 +92,20 @@ Elke beslissing: wat, waarom, alternatieven, bron. Bronpaden verwijzen naar de U
 - **Wat**: één `<umb-ve-overlay>` met een open shadow root, `position: fixed`, `pointer-events: none`.
 - **Waarom**: site-CSS en overlay-CSS raken elkaar niet. Er hoeft niets per element te worden toegevoegd, dus de DOM van de
   site (en daarmee de Vue-hydration) blijft ongemoeid.
+
+## D12 – Twee URL-providers: met en zonder edit-modus
+- **Wat**: `VisualEditing` (iframe in de workspace-view, `ve=1`) en `FrontendPreview` (de knop "Save and preview" in een
+  nieuw venster, zonder edit-modus). Beide geven een URL `/preview/{documentKey}?preview=<token>`. Daar zoekt Astro de
+  route op (ook voor nog nooit gepubliceerde documenten) en stuurt door.
+- **Waarom**: in een los venster is er geen parent en zijn overlays zinloos. Via `/preview/{key}` hoeft de CMS de
+  frontend-route niet te kennen.
+- **Bron**: `IUrlProvider.GetPreviewUrlAsync`, `UrlInfo.FromUri` / `UrlInfo.AsMessage` (Umbraco.Core 18.3.2 XML-docs).
+
+## D13 – Baseline voor "gepubliceerd blijft exact gelijk": live opgenomen met de extensie uit
+- **Wat**: `scripts/record-baseline.mjs` start de CMS met `VisualEditing__Enabled=false` (de composer registreert niets),
+  voert een vaste set requests uit (`tests/api/requests.mjs`) en slaat de ruwe responses op. Daarna start Playwright de
+  CMS met de extensie aan en vergelijkt de tests byte voor byte.
+- **Waarom**: dat is letterlijk "gelijk aan zonder de uitbreiding", zonder datums te normaliseren. Omdat de baseline elke
+  run opnieuw wordt opgenomen, maakt het niet uit dat de e2e-test concept-content wijzigt.
+- **Alternatieven**: vaste fixtures in git (breken na elke herinstallatie of contentwijziging); vergelijken met dezelfde
+  request zonder header (bewijst niet dat de modifier zelf niets verandert).

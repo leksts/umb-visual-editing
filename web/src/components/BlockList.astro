@@ -1,0 +1,31 @@
+---
+/**
+ * Kiest per blocktype het Vue-component. Dit is "routing" van blocks en staat daarom in Astro:
+ * alleen hier kan een client-directive worden gezet (QuoteBlock is interactief en wordt gehydrateerd).
+ */
+import TextBlock from './TextBlock.vue';
+import QuoteBlock from './QuoteBlock.vue';
+import { blockEdit } from '../lib/edit-metadata';
+import type { ApiBlockItem, ApiContent } from '../lib/umbraco';
+
+interface Props {
+	item: ApiContent;
+	blocks: ApiBlockItem[];
+}
+const { item, blocks } = Astro.props;
+---
+
+{
+	blocks.map((block) => {
+		const p = block.content.properties as Record<string, string>;
+		const edit = blockEdit(item, block);
+		switch (block.content.contentType) {
+			case 'textBlock':
+				return <TextBlock heading={p.heading} text={p.text} edit={edit} />;
+			case 'quoteBlock':
+				return <QuoteBlock client:load quote={p.quote} author={p.author} edit={edit} />;
+			default:
+				return null;
+		}
+	})
+}

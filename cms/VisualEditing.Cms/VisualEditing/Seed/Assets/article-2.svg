@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8250df"/><stop offset="1" stop-color="#d2a8ff"/></linearGradient></defs>
+  <rect width="1200" height="600" fill="url(#g)"/>
+  <circle cx="900" cy="180" r="140" fill="#ffffff" fill-opacity=".18"/>
+  <circle cx="260" cy="460" r="200" fill="#ffffff" fill-opacity=".12"/>
+  <text x="80" y="330" font-family="system-ui, sans-serif" font-size="96" font-weight="700" fill="#ffffff">Vormen</text>
+</svg>

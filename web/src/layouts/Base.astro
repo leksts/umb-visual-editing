@@ -1,0 +1,45 @@
+---
+import SiteHeader from '../components/SiteHeader.vue';
+import EditRuntime from '../components/EditRuntime.astro';
+import { link } from '../lib/umbraco';
+
+interface Props {
+	title: string;
+}
+const { title } = Astro.props;
+const preview = Astro.locals.preview;
+---
+
+<!doctype html>
+<html lang="nl">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>{title}</title>
+		{preview.enabled && <meta name="robots" content="noindex" />}
+	</head>
+	<body>
+		<div class="container">
+			<SiteHeader homeHref={link('/', preview)} preview={preview.enabled} />
+			<main>
+				<slot />
+			</main>
+		</div>
+		{preview.edit && <EditRuntime />}
+	</body>
+</html>
+
+<style is:global>
+	:root {
+		--bg: #ffffff;
+		--fg: #1f2328;
+		--muted: #59636e;
+		--border: #d1d9e0;
+		--soft: #f6f8fa;
+		--accent: #0969da;
+		color-scheme: light;
+	}
+	* { box-sizing: border-box; }
+	body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
+	.container { max-width: 760px; margin: 0 auto; padding: 0 16px 6rem; }
+</style>

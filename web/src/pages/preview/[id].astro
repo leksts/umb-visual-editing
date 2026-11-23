@@ -1,0 +1,18 @@
+---
+/**
+ * Ingang voor de preview-URL uit de CMS (VisualEditingUrlProvider): /preview/{documentKey}?preview=…&ve=1.
+ * Zoekt de route van het (eventueel nog ongepubliceerde) document op en stuurt door, met behoud van de parameters.
+ */
+import { loadById } from '../../lib/content';
+import { link } from '../../lib/umbraco';
+
+const preview = Astro.locals.preview;
+if (!preview.enabled) {
+	return new Response('Ongeldig of verlopen preview-token', { status: 401 });
+}
+const item = await loadById(Astro.params.id!, preview);
+if (!item) {
+	return new Response('Niet gevonden', { status: 404 });
+}
+return Astro.redirect(link(item.route.path, preview), 302);
+---

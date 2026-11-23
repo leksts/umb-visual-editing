@@ -1,0 +1,16 @@
+---
+/**
+ * Laadt het edit-script. Wordt alleen gerenderd in preview + edit-modus (zie Base.astro),
+ * dus zonder edit-modus staat er geen script en geen configuratie in de pagina.
+ */
+import { config } from '../lib/config';
+
+const runtimeConfig = { allowedOrigins: config.allowedParentOrigins };
+---
+
+<script type="application/json" id="umb-ve-config" set:html={JSON.stringify(runtimeConfig)} />
+<script>
+	import { startVisualEditing } from '../edit/edit-script';
+
+	startVisualEditing();
+</script>

@@ -1,0 +1,56 @@
+---
+import Base from '../layouts/Base.astro';
+import PageHeader from '../components/PageHeader.vue';
+import ArticleImage from '../components/ArticleImage.vue';
+import ArticleCard from '../components/ArticleCard.vue';
+import BlockList from '../components/BlockList.astro';
+import { loadChildren, loadPage } from '../lib/content';
+import { documentEdit } from '../lib/edit-metadata';
+import { link, mediaUrl, type ApiBlockItem, type ApiMedia } from '../lib/umbraco';
+
+const preview = Astro.locals.preview;
+const route = `/${Astro.params.slug ?? ''}`.replace(/\/?$/, '/');
+const item = await loadPage(route, preview);
+if (!item) {
+	return new Response('Niet gevonden', { status: 404 });
+}
+
+const p = item.properties as {
+	title?: string;
+	intro?: string;
+	image?: ApiMedia[] | null;
+	blocks?: { items: ApiBlockItem[] } | null;
+};
+const edit = documentEdit(item);
+const image = p.image?.[0];
+const children = item.contentType === 'home' ? await loadChildren(item.id, preview) : [];
+---
+
+<Base title={p.title ?? item.name}>
+	<PageHeader title={p.title ?? item.name} intro={p.intro} edit={edit} />
+	{image && <ArticleImage src={mediaUrl(image.url)} alt={image.name} edit={edit} />}
+	{p.blocks && <BlockList item={item} blocks={p.blocks.items} />}
+	{
+		children.length > 0 && (
+			<div class="cards">
+				{children.map((child) => {
+					const c = child.properties as { title?: string; intro?: string; image?: ApiMedia[] | null };
+					const img = c.image?.[0];
+					return (
+						<ArticleCard
+							href={link(child.route.path, preview)}
+							title={c.title ?? child.name}
+							intro={c.intro}
+							image={img ? mediaUrl(img.url) : null}
+							edit={documentEdit(child)}
+						/>
+					);
+				})}
+			</div>
+		)
+	}
+</Base>
+
+<style>
+	.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin-top: 2rem; }
+</style>

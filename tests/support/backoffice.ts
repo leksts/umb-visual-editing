@@ -20,3 +20,17 @@ export async function login(page: Page) {
 export function documentViewUrl(key: string, view: string) {
 	return `/umbraco/section/content/workspace/document/edit/${key}/invariant/view/${view}`;
 }
+
+/**
+ * Het element dat echt focus heeft (door shadow roots heen), met de alias van de omliggende `umb-property`
+ * en de huidige waarde van het invoerveld.
+ */
+export function focused(page: Page) {
+	return page.evaluate(() => {
+		let el: any = document.activeElement;
+		while (el?.shadowRoot?.activeElement) el = el.shadowRoot.activeElement;
+		let p: any = el;
+		while (p && p.localName !== 'umb-property') p = p.parentNode instanceof ShadowRoot ? p.parentNode.host : p.parentNode;
+		return { tag: el?.localName as string | undefined, property: p?.alias as string | undefined, value: el?.value as string | undefined };
+	});
+}

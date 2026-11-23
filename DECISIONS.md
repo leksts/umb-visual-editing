@@ -131,15 +131,34 @@ Elke beslissing: wat, waarom, alternatieven, bron. Bronpaden verwijzen naar de U
   `content/content/workspace/views/edit/content-editor.element.ts` (tab-routes), `@umbraco-cms/backoffice/extension-api`
   (`createExtensionElement`). Bevestigd met een spike in de draaiende backoffice.
 
-## D16 – Navigatie naar tab, property en block
-- **Wat**: de tab wordt bepaald via `workspace.structure.getPropertyStructureByAlias` + `getOwnerContainerById` (publiek),
-  en de route is `tab/{encodeFolderName(tabnaam)}` of `root`. De property en het block-item worden gezocht door shadow roots
-  heen (`umb-property` met `.alias`, `umb-block-list-entry` met `.contentKey`), en daarna scrollen we ze in beeld, markeren we ze
-  en focussen we het invoerveld. Bij een ander document: navigeren naar diens `…/view/visual-editing`, met het focusdoel in
-  `sessionStorage`.
-- **Waarom**: er is geen publieke API om op een property te focussen of een block te openen. De DOM-afhankelijkheid zit
-  in één functie (`backoffice/src/navigation.ts: focusProperty`).
-- **Bron**: spike (DOM bekeken in de draaiende backoffice 18.3.2), `content-type-structure-manager.class.d.ts`.
+## D16 – Navigatie naar tab, property, block en veld (bijgewerkt na feedback)
+- **Wat**:
+  - Tab via `workspace.structure.getPropertyStructureByAlias` + `getOwnerContainerById` (publiek); route
+    `tab/{encodeFolderName(tabnaam)}` of `root`.
+  - Veld van het document: `umb-property` met `.alias`, in beeld, en focus op het invoerveld *binnen* de property-editor
+    (door shadow roots heen; er wordt gewacht tot de lui geladen editor er is).
+  - Veld in een block: het `umb-block-list-entry` (`.contentKey`) wordt geopend via **zijn eigen edit-link** (dezelfde
+    routed modal als een klik op het item). In dat modal krijgt de property van het block focus (bv. `author`).
+  - Een net geopend modal zet zelf nog de focus op het naamveld. De focus wordt daarom ~1 s vastgehouden.
+- **Waarom**: de eerste versie markeerde alleen de Block List-property ("het hele blocks-object"). De redacteur wil
+  direct in het juiste veld uitkomen. Er is geen publieke API om een block te openen of een property te focussen. De
+  DOM-afhankelijkheid zit in één bestand (`backoffice/src/navigation.ts`).
+- **Race**: de edit-link van een block wordt per route opgebouwd. Direct na een tab-navigatie wordt gewacht tot de link
+  onder de huidige route valt, en volgt bij geen modal één nieuwe poging (zonder dit faalde de e2e-test af en toe).
+- **Bron**: spike in de draaiende backoffice 18.3.2 (link `…/modal/umb-modal-workspace/invariant/{property}/block/edit/{key}/view/content`),
+  `content-type-structure-manager.class.d.ts`.
+
+## D18 – Element van een ander document: openen in een workspace-modal, preview blijft staan
+- **Wat**: een klik op een element van een ander document (bv. een artikelkaart, die ook een link is) opent dat document
+  in een modal via `UmbModalRouteRegistrationController` + `UMB_WORKSPACE_MODAL` (`edit/{key}`), dezelfde publieke API
+  als `document-item-ref.element.ts`. Het juiste veld krijgt focus; staat het niet op de zichtbare tab, dan worden de
+  tabs van dat modal geprobeerd. De frontend meldt in `ready` welke documenten op de pagina staan (`documentKeys`,
+  additief binnen protocolversie 1). Opslaan van één daarvan herlaadt de preview.
+- **Waarom**: de eerste versie navigeerde de backoffice naar het andere document, waardoor de preview naar die pagina
+  sprong. Dat voelde als "de link volgen", en de redacteur verloor de pagina waar hij mee bezig was. Het iframe zelf
+  volgde de link niet (de klik wordt tegengehouden); dat is nu ook expliciet getest.
+- **Alternatieven**: navigeren naar het andere document (eerste versie); het andere document in het rechterpaneel laden
+  (vereist een tweede workspace-context; complex).
 
 ## D17 – Herladen na opslaan: `UmbEntityUpdatedEvent` op de action-event-context
 - **Wat**: de view luistert via `UMB_ACTION_EVENT_CONTEXT` naar `UmbEntityUpdatedEvent.TYPE` voor de eigen `unique`.

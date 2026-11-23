@@ -42,8 +42,9 @@ Resultaat: alle vier de doelen werken lokaal en worden aangetoond met 41 geautom
 
 | Wens | Status in v18 | Workaround |
 |---|---|---|
-| Naar een specifieke property navigeren/focussen | Geen publieke API of route | Tab via de publieke structuur-API en tab-route; daarna het `umb-property`-element (`.alias`) zoeken door shadow roots heen, in beeld scrollen, markeren en focussen. Geïsoleerd in `backoffice/src/navigation.ts`. |
-| Een specifiek block openen | Block-workspace-modal heeft geen stabiele publieke URL | Het `umb-block-list-entry` (`.contentKey`) in beeld scrollen en markeren; de redacteur klikt het zelf open. |
+| Naar een specifieke property navigeren/focussen | Geen publieke API of route | Tab via de publieke structuur-API en tab-route; daarna `umb-property` (`.alias`) zoeken en het invoerveld in de (lui geladen) property-editor focussen, door shadow roots heen. Geïsoleerd in `backoffice/src/navigation.ts`. |
+| Een specifiek block openen en een veld erin focussen | Block-workspace-modal heeft geen stabiele publieke URL | Het `umb-block-list-entry` (`.contentKey`) openen via zijn eigen edit-link en in het modal de property van het block focussen. Wachten tot de link bij de huidige route hoort (anders draait de router de navigatie terug), en de focus kort vasthouden (het modal zet zelf focus op het naamveld). |
+| Een ander document bewerken zonder de preview te verlaten | Kan, met publieke API | `UmbModalRouteRegistrationController` + `UMB_WORKSPACE_MODAL` (zoals de documentlijst); de preview herlaadt als een document op de pagina wordt opgeslagen (`documentKeys` in `ready`). |
 | Metadata per item via een subclass | Serialisatie via interface-type, geen polymorfisme | JSON-contract-modifier + `ConditionalWeakTable` (DECISIONS D2). |
 | Preview-cookies in een cross-site iframe | Third-party cookies (browserbeleid, niet Umbraco) | HMAC-token in de URL; Astro haalt server-side met de API-key op (D6). |
 | Configuratie van preview-URL's per documenttype in appsettings | Bestaat niet; alleen code (`IUrlProvider`) | Eigen optie `VisualEditing:DocumentTypes` in de URL-provider. |
@@ -59,8 +60,12 @@ Er is geen afwijking van de vaste keuzes van de opdracht nodig geweest.
 - De e2e-test wijzigt de concepttitel van artikel A en zet die daarna terug. Gepubliceerde content wordt nooit aangeraakt.
 - Het OpenAPI-schema van de Delivery API kan `editMetadata` als optioneel veld tonen (de modifier hangt aan dezelfde
   JSON-opties). Responses veranderen daar niet door.
-- Klikken op links binnen bewerkbare elementen worden in edit-modus edit-verzoeken. Navigeren binnen de preview gaat via
-  niet-bewerkbare links (bijvoorbeeld het logo).
+- Klikken op links binnen bewerkbare elementen worden in edit-modus edit-verzoeken (de link wordt niet gevolgd).
+  Navigeren binnen de preview gaat via niet-bewerkbare links (bijvoorbeeld het logo).
+- Geneste blocks (block in block) worden nog niet geopend: de metadata beschrijft alleen het eerste niveau. De
+  navigatiecode (`focusTarget`) is wel zo opgezet dat een pad van blocks één voor één geopend kan worden.
+- Terwijl een modal open is, dekt de backdrop de preview af; de eerste klik daarop sluit het modal (standaard
+  Umbraco-gedrag).
 - Het preview-token geeft toegang tot de preview van alle documenten (niet aan één document gebonden) en verloopt na 60 minuten.
 
 ## Inschatting: wat is nodig voor productie

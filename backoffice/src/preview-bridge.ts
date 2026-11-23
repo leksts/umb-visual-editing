@@ -10,7 +10,8 @@ import {
 } from '../../shared/protocol';
 
 export interface PreviewBridgeCallbacks {
-	onReady(): void;
+	/** documentKeys: documenten met bewerkbare elementen op de getoonde pagina. */
+	onReady(documentKeys: string[]): void;
 	onEdit(message: EditRequestMessage): void;
 }
 
@@ -81,7 +82,7 @@ export class PreviewBridge {
 				this.#pendingScroll = null;
 				break;
 			case 'ready':
-				this.#callbacks.onReady();
+				this.#callbacks.onReady(Array.isArray(message.documentKeys) ? message.documentKeys.map(String) : []);
 				break;
 			case 'edit':
 				this.#callbacks.onEdit(message);

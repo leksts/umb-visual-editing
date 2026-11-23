@@ -32,6 +32,8 @@ export interface InitMessage extends Envelope<'init'> {
 export interface ReadyMessage extends Envelope<'ready'> {
 	url: string;
 	editMode: boolean;
+	/** Optioneel (additief binnen versie 1): document-keys met bewerkbare elementen op deze pagina. */
+	documentKeys?: string[];
 }
 
 /** frontend → parent. Redacteur klikte op een bewerkbaar element. */

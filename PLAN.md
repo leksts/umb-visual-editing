@@ -94,8 +94,10 @@ https://learn.microsoft.com/dotnet/standard/serialization/system-text-json/custo
 - Property: er is **geen** publieke API om op een property te focussen. Beste haalbare alternatief: na navigatie naar de
   juiste tab het `umb-property`-element met de juiste alias opzoeken (door shadow roots heen) en `scrollIntoView()` +
   focus + tijdelijke markering. Dat hangt af van interne DOM-structuur. Het is een risico en staat daarom geïsoleerd in één functie.
-- Block: geen stabiele URL voor de block-workspace-modal. Alternatief: naar de property met de Block List navigeren en het
-  block-item (op content-key/index) markeren en in beeld scrollen.
+- Block: geen stabiele publieke URL voor de block-workspace-modal. Uitgevoerd: het block-item zoeken en openen via zijn
+  eigen edit-link, en in het modal het veld van het block focussen (DECISIONS.md D16).
+- Ander document: openen in een workspace-modal via `UmbModalRouteRegistrationController` + `UMB_WORKSPACE_MODAL`
+  (DECISIONS.md D18), zodat de preview blijft staan.
 
 ### 1.6 Weten dat het document is opgeslagen
 
@@ -159,7 +161,7 @@ Alle berichten: `{ source: "umbraco-visual-editing", version: 1, type: "...", ..
 |---|---|---|---|---|
 | 1 | frontend → parent | `loaded` | `{ url }` | Het enige bericht vóór de handshake. Wordt verstuurd met `targetOrigin` = elke geconfigureerde toegestane parent-origin (nooit `*`). Alleen de origin die echt de parent is, ontvangt het. |
 | 2 | parent → frontend | `init` | `{ editMode: boolean, scroll?: { x, y } }` | Frontend accepteert alleen als `event.source === window.parent` en `event.origin` in de allowlist staat. Daarna onthoudt hij die origin. Alle volgende berichten gaan alleen naar die origin, en alleen berichten van die origin worden geaccepteerd. Een tweede `init` van een andere origin wordt genegeerd. |
-| 3 | frontend → parent | `ready` | `{ url, editMode }` | Bevestiging van de handshake (na herstel van de scrollpositie). |
+| 3 | frontend → parent | `ready` | `{ url, editMode, documentKeys? }` | Bevestiging van de handshake (na herstel van de scrollpositie). `documentKeys` (later toegevoegd, additief): documenten met bewerkbare elementen op de pagina; opslaan van één ervan herlaadt de preview. |
 | 4 | frontend → parent | `edit` | `{ documentKey, culture, propertyAlias, blockKey?, blockPropertyAlias?, entityType: "document" }` | Bij een klik op een bewerkbaar element in edit-modus. |
 | 5 | parent → frontend | `getScroll` | `{ requestId }` | Vlak vóór herladen. |
 | 6 | frontend → parent | `scroll` | `{ requestId, x, y }` | Antwoord op 5. |

@@ -1,6 +1,13 @@
 import { css, customElement, html, nothing, state } from '@umbraco-cms/backoffice/external/lit';
 import { UmbLitElement } from '@umbraco-cms/backoffice/lit-element';
-import { UMB_DOCUMENT_WORKSPACE_CONTEXT, type UmbDocumentWorkspaceContext } from '@umbraco-cms/backoffice/document';
+import {
+	UMB_DOCUMENT_ENTITY_TYPE,
+	UMB_DOCUMENT_WORKSPACE_CONTEXT,
+	UMB_EDIT_DOCUMENT_WORKSPACE_PATH_PATTERN,
+	type UmbDocumentWorkspaceContext,
+} from '@umbraco-cms/backoffice/document';
+import { UmbModalRouteRegistrationController } from '@umbraco-cms/backoffice/router';
+import { UMB_WORKSPACE_MODAL } from '@umbraco-cms/backoffice/workspace';
 import { UMB_PROPERTY_DATASET_CONTEXT } from '@umbraco-cms/backoffice/property';
 import { UMB_ACTION_EVENT_CONTEXT, type UmbActionEventContext } from '@umbraco-cms/backoffice/action';
 import { UmbEntityUpdatedEvent } from '@umbraco-cms/backoffice/entity-action';
@@ -11,15 +18,7 @@ import { createExtensionElement } from '@umbraco-cms/backoffice/extension-api';
 import type { UmbWorkspaceViewElement } from '@umbraco-cms/backoffice/workspace';
 import type { EditRequestMessage } from '../../shared/protocol';
 import { PreviewBridge } from './preview-bridge';
-import {
-	documentViewPath,
-	focusProperty,
-	navigate,
-	setPendingFocus,
-	tabSegmentFor,
-	takePendingFocus,
-	type EditTarget,
-} from './navigation';
+import { focusTarget, modalScope, navigate, tabSegmentFor, type EditTarget } from './navigation';
 import { VISUAL_EDITING_VIEW_PATHNAME } from './index';
 
 const URL_PROVIDER_ALIAS = 'VisualEditing';
@@ -28,8 +27,9 @@ const CONTENT_VIEW_ALIAS = 'Umb.WorkspaceView.Document.Edit';
 
 /**
  * Workspace-view "Visual editing": links de frontend-preview in een iframe, rechts de standaard content-editor van
- * Umbraco (hetzelfde element als de view "Content"). Klik in de preview → juiste tab + property rechts (of ander
- * document). Opslaan → iframe herlaadt met behoud van de scrollpositie.
+ * Umbraco (hetzelfde element als de view "Content"). Klik in de preview → juiste tab en veld rechts; veld in een
+ * block → het block wordt geopend en het veld krijgt focus; element van een ander document → dat document opent in
+ * een modal, de preview blijft staan. Opslaan → iframe herlaadt met behoud van de scrollpositie.
  */
 @customElement('visual-editing-workspace-view')
 export class VisualEditingWorkspaceViewElement extends UmbLitElement implements UmbWorkspaceViewElement {
@@ -42,8 +42,12 @@ export class VisualEditingWorkspaceViewElement extends UmbLitElement implements 
 	#actionEvents?: UmbActionEventContext;
 	#unique?: string | null;
 	#culture: string | null = null;
+	/** Documenten die op de getoonde pagina staan (uit "ready"); opslaan van één ervan herlaadt de preview. */
+	#previewDocuments = new Set<string>();
+	/** Route naar het workspace-modal (publieke modal-route-API, zoals document-item-ref.element.ts). */
+	#documentModalPath?: string;
 	#bridge = new PreviewBridge({
-		onReady: () => this.#onReady(),
+		onReady: (documentKeys) => this.#onReady(documentKeys),
 		onEdit: (message) => this.#onEdit(message),
 	});
 
@@ -67,6 +71,13 @@ export class VisualEditingWorkspaceViewElement extends UmbLitElement implements 
 			if (!manifest || this._editor) return;
 			this._editor = await createExtensionElement(manifest as never);
 		}, '_observeContentView');
+		// Een ander document openen in een modal, met dezelfde publieke API als de documentlijst/content picker.
+		new UmbModalRouteRegistrationController(this, UMB_WORKSPACE_MODAL)
+			.addUniquePaths(['unique'])
+			.onSetup(() => ({ data: { entityType: UMB_DOCUMENT_ENTITY_TYPE, preset: {} } }))
+			.observeRouteBuilder((routeBuilder) => {
+				this.#documentModalPath = routeBuilder({});
+			});
 	}
 
 	override connectedCallback() {
@@ -113,15 +124,16 @@ export class VisualEditingWorkspaceViewElement extends UmbLitElement implements 
 		if (iframe && this._previewUrl) this.#bridge.attach(iframe, this._previewUrl);
 	}
 
-	#onReady() {
+	#onReady(documentKeys: string[]) {
+		this.#previewDocuments = new Set(documentKeys);
 		this._ready = true;
-		const pending = this.#unique ? takePendingFocus(this.#unique) : null;
-		if (pending) this.#focus(pending);
 	}
 
 	#onEntityUpdated = (event: Event) => {
 		const e = event as UmbEntityUpdatedEvent;
-		if (e.getUnique() !== this.#unique) return;
+		if (e.getEntityType() !== UMB_DOCUMENT_ENTITY_TYPE) return;
+		const unique = e.getUnique();
+		if (!unique || (unique !== this.#unique && !this.#previewDocuments.has(unique))) return;
 		this.#reloadPreview();
 	};
 
@@ -148,23 +160,23 @@ export class VisualEditingWorkspaceViewElement extends UmbLitElement implements 
 			blockKey: message.blockKey,
 			blockPropertyAlias: message.blockPropertyAlias,
 		};
-		if (target.documentKey !== this.#unique) {
-			// Ander document: daarheen navigeren (in deze view) en daar focussen zodra de preview klaar is.
-			setPendingFocus(target);
-			navigate(documentViewPath(target.documentKey, target.culture, VISUAL_EDITING_VIEW_PATHNAME));
+		this.dispatchEvent(new CustomEvent('visual-editing-edit', { detail: target, bubbles: true, composed: true }));
+		if (!target.propertyAlias) return;
+		const base = location.pathname.split(`/view/${VISUAL_EDITING_VIEW_PATHNAME}`)[0] + `/view/${VISUAL_EDITING_VIEW_PATHNAME}`;
+
+		if (target.documentKey === this.#unique) {
+			// Eigen document: juiste tab in de editor naast de preview (sluit ook een open modal), dan veld focussen.
+			const segment = this.#workspace ? await tabSegmentFor(this.#workspace, target.propertyAlias) : null;
+			navigate(segment ? `${base}/${segment}` : base);
+			await focusTarget(() => this.renderRoot.querySelector('#editor'), target);
 			return;
 		}
-		await this.#focus(target);
-	}
 
-	async #focus(target: EditTarget) {
-		this.dispatchEvent(new CustomEvent('visual-editing-edit', { detail: target, bubbles: true, composed: true }));
-		if (!this.#workspace || !target.propertyAlias) return;
-		const segment = await tabSegmentFor(this.#workspace, target.propertyAlias);
-		const base = location.pathname.split(`/view/${VISUAL_EDITING_VIEW_PATHNAME}`)[0];
-		if (segment) navigate(`${base}/view/${VISUAL_EDITING_VIEW_PATHNAME}/${segment}`);
-		const editor = this.renderRoot.querySelector('#editor');
-		if (editor) await focusProperty(editor, target);
+		// Ander document (bv. een artikelkaart op de homepage): open het in een modal; de preview blijft staan.
+		if (!this.#documentModalPath) return;
+		const modal = `${this.#documentModalPath.replace(/\/?$/, '/')}${UMB_EDIT_DOCUMENT_WORKSPACE_PATH_PATTERN.generateLocal({ unique: target.documentKey })}`;
+		navigate(new URL(modal, location.href).pathname);
+		await focusTarget(modalScope, target, { tryTabs: true });
 	}
 
 	override render() {

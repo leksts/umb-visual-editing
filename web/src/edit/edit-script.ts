@@ -85,7 +85,13 @@ export function startVisualEditing(): void {
 				state.parentOrigin = origin;
 				setEditMode(message.editMode === true);
 				restoreScroll(message.scroll ?? null).then(() => {
-					send(createMessage<ReadyMessage>('ready', { url: location.href, editMode: state.editMode }));
+					send(
+						createMessage<ReadyMessage>('ready', {
+							url: location.href,
+							editMode: state.editMode,
+							documentKeys: [...new Set([...registry].map((el) => el.getAttribute(A.document)!))],
+						}),
+					);
 				});
 				break;
 			}

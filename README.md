@@ -49,8 +49,9 @@ Block List met Tekstblok en Citaat, drie artikelen). Opnieuw beginnen: stop alle
 1. Open in de backoffice een artikel en kies rechtsboven de weergave **Visual editing**.
 2. Links staat de preview (concept-content), rechts de gewone editor.
 3. Beweeg over de preview: bewerkbare elementen krijgen een kader met label. Klik op een element: rechts opent de juiste
-   tab en de property (of het block) wordt in beeld gebracht en gemarkeerd. Een klik op een artikelkaart op de homepage
-   opent dat artikel.
+   tab en het veld krijgt focus. Bij een veld in een block (bijvoorbeeld de auteur van een citaat) opent het block en
+   krijgt dát veld focus. Een element van een ander document (zoals een artikelkaart op de homepage, ook als het een
+   link is) opent dat document in een modal; de preview blijft staan en ververst na opslaan.
 4. Wijzig iets en klik **Save**: de preview herlaadt op dezelfde scrollpositie.
 
 Via **Save and preview ▸ Frontend (Astro)** opent de frontend-preview in een nieuw venster (zonder edit-modus).

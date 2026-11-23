@@ -48,6 +48,26 @@ test.describe('fase 2: met edit-modus (nep-parent)', () => {
 		const log = await messages(page);
 		expect(log.map((m) => m.data.type)).toEqual(['loaded', 'ready']);
 		expect(log.every((m) => m.data.source === 'umbraco-visual-editing' && m.data.version === 1)).toBe(true);
+		// "ready" meldt welke documenten op de pagina staan (de backoffice herlaadt als één ervan wordt opgeslagen).
+		expect(log[1].data.documentKeys).toEqual([A]);
+	});
+
+	test('"ready" op de homepage noemt ook de documenten van de artikelkaarten', async ({ page }) => {
+		await openHarness(page, { target: '/' });
+		await waitForReady(page);
+		const ready = (await messages(page)).find((m) => m.data.type === 'ready')!;
+		expect(new Set(ready.data.documentKeys as string[])).toEqual(
+			new Set([KEYS.home, KEYS.articleA, KEYS.articleB, KEYS.articleC]),
+		);
+	});
+
+	test('klik op een link in edit-modus volgt de link niet, maar stuurt "edit"', async ({ page }) => {
+		const { frame } = await openHarness(page, { target: '/' });
+		await waitForReady(page);
+		await frame.locator(`.card a[data-umb-doc="${KEYS.articleB}"]`).click();
+		expect(await lastEdit(page)).toMatchObject({ documentKey: KEYS.articleB, propertyAlias: 'title' });
+		await page.waitForTimeout(500);
+		expect(await frame.locator('body').evaluate(() => location.pathname)).toBe('/');
 	});
 
 	test('vóór de handshake: geen overlay en geen edit-berichten', async ({ page }) => {

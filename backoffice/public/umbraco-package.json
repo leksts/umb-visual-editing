@@ -1,0 +1,15 @@
+{
+  "$schema": "../../node_modules/@umbraco-cms/backoffice/umbraco-package-schema.json",
+  "name": "Visual Editing",
+  "id": "VisualEditing",
+  "version": "0.1.0",
+  "allowTelemetry": false,
+  "extensions": [
+    {
+      "type": "bundle",
+      "alias": "VisualEditing.Bundle",
+      "name": "Visual Editing bundle",
+      "js": "/App_Plugins/VisualEditing/visual-editing.js"
+    }
+  ]
+}

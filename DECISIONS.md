@@ -109,3 +109,39 @@ Elke beslissing: wat, waarom, alternatieven, bron. Bronpaden verwijzen naar de U
   run opnieuw wordt opgenomen, maakt het niet uit dat de e2e-test concept-content wijzigt.
 - **Alternatieven**: vaste fixtures in git (breken na elke herinstallatie of contentwijziging); vergelijken met dezelfde
   request zonder header (bewijst niet dat de modifier zelf niets verandert).
+
+## D14 – Lokaal `Umbraco:CMS:Global:UseHttps=false`
+- **Wat**: in `appsettings.Development.json`. Daarmee zet Umbraco `OpenIddictServerAspNetCoreOptions.DisableTransportSecurityRequirement`.
+- **Waarom**: zonder deze instelling weigert de backoffice-login over HTTP ("This server only accepts HTTPS requests").
+  HTTPS lokaal zou betekenen dat een `http://localhost:4321`-iframe in een `https`-backoffice draait (mixed content), of
+  dat Astro ook een certificaat nodig heeft. Alleen voor lokaal. In productie: alles via HTTPS.
+- **Bron**: `src/Umbraco.Cms.Api.Common/Configuration/ConfigureOpenIddict.cs` (r. 26).
+
+## D15 – Standaard content-editor naast de preview, geladen via het manifest van de Content-view
+- **Wat**: de workspace-view (gewicht 150, dus na "Content" (200), zodat Content de standaard blijft) toont links het
+  iframe en rechts de standaard Umbraco-editor. Die wordt gemaakt met `umbExtensionsRegistry.byAlias('Umb.WorkspaceView.Document.Edit')`
+  + `createExtensionElement(manifest)` (publieke extension-API). Het element neemt de bestaande workspace- en
+  dataset-contexten over, inclusief de tab-routes (`…/view/visual-editing/tab/{tab}`).
+- **Waarom**: de redacteur bewerkt naast de preview, en de preview herlaadt na opslaan zonder weg te navigeren. Zo is
+  e2e-stap 4 (titel wijzigen, iframe op dezelfde scrollpositie) letterlijk mogelijk. Er wordt geen intern element-tagname gebruikt.
+- **Alternatieven**: `<umb-content-workspace-view-edit>` direct renderen (tag is niet geëxporteerd, en is pas gedefinieerd
+  nadat de Content-view één keer is geladen; in de spike bleef het paneel leeg); naar de Content-view navigeren (dan
+  verdwijnt de iframe).
+- **Bron**: `documents/workspace/manifests.js` (alias, gewicht 200, kind `contentEditor`),
+  `content/content/workspace/views/edit/content-editor.element.ts` (tab-routes), `@umbraco-cms/backoffice/extension-api`
+  (`createExtensionElement`). Bevestigd met een spike in de draaiende backoffice.
+
+## D16 – Navigatie naar tab, property en block
+- **Wat**: de tab wordt bepaald via `workspace.structure.getPropertyStructureByAlias` + `getOwnerContainerById` (publiek),
+  en de route is `tab/{encodeFolderName(tabnaam)}` of `root`. De property en het block-item worden gezocht door shadow roots
+  heen (`umb-property` met `.alias`, `umb-block-list-entry` met `.contentKey`), en daarna scrollen we ze in beeld, markeren we ze
+  en focussen we het invoerveld. Bij een ander document: navigeren naar diens `…/view/visual-editing`, met het focusdoel in
+  `sessionStorage`.
+- **Waarom**: er is geen publieke API om op een property te focussen of een block te openen. De DOM-afhankelijkheid zit
+  in één functie (`backoffice/src/navigation.ts: focusProperty`).
+- **Bron**: spike (DOM bekeken in de draaiende backoffice 18.3.2), `content-type-structure-manager.class.d.ts`.
+
+## D17 – Herladen na opslaan: `UmbEntityUpdatedEvent` op de action-event-context
+- **Wat**: de view luistert via `UMB_ACTION_EVENT_CONTEXT` naar `UmbEntityUpdatedEvent.TYPE` voor de eigen `unique`.
+  Daarna volgen `getScroll`, een nieuwe preview-URL (vers token) met cache-buster, `init` met de scrollpositie en dan `ready`.
+- **Bron**: `content/content/workspace/content-detail-workspace-base.ts` (`#update` → `#dispatchActionEvents`).

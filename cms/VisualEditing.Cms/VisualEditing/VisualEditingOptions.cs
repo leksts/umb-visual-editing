@@ -11,11 +11,11 @@ public sealed class VisualEditingOptions
     /// </summary>
     public bool Enabled { get; set; } = true;
 
-    /// <summary>Basis-URL van de frontend (Astro).</summary>
+    /// <summary>
+    /// Basis-URL van de frontend (Astro). De backoffice-extensie accepteert alleen postMessage van de origin van de
+    /// preview-URL die deze server uitgeeft; daarmee is dit ook de allowlist van de parent.
+    /// </summary>
     public string FrontendUrl { get; set; } = "http://localhost:4321";
-
-    /// <summary>Origins die in de backoffice als iframe-bron worden geaccepteerd (postMessage-allowlist van de parent).</summary>
-    public string[] AllowedFrontendOrigins { get; set; } = [];
 
     /// <summary>Gedeeld geheim met de frontend om preview-tokens te ondertekenen (HMAC-SHA256).</summary>
     public string PreviewSecret { get; set; } = string.Empty;

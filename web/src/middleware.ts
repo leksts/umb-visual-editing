@@ -9,7 +9,7 @@ import { getPreviewContext } from './lib/preview';
 export const onRequest = defineMiddleware(async (context, next) => {
 	context.locals.preview = getPreviewContext(context.url);
 	const response = await next();
-	const ancestors = context.locals.preview.enabled ? ["'self'", ...config.allowedParentOrigins] : ["'self'"];
+	const ancestors = context.locals.preview.enabled ? ["'self'", ...config.frameAncestors] : ["'self'"];
 	response.headers.set('Content-Security-Policy', `frame-ancestors ${ancestors.join(' ')}`);
 	if (context.locals.preview.enabled) {
 		response.headers.set('Cache-Control', 'no-store');

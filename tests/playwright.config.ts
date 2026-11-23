@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-import { CMS_URL, WEB_URL } from './support/env';
+import { CMS_URL, FOREIGN_WEB_URL, WEB_URL } from './support/env';
 
 /**
  * Start zelf de CMS (dotnet) en de gebouwde Astro-server, tenzij ze al draaien (reuseExistingServer).
@@ -35,6 +35,11 @@ export default defineConfig({
 			url: WEB_URL,
 			reuseExistingServer: true,
 			timeout: 180_000,
+			env: {
+				VE_TEST_HARNESS: '1',
+				// 127.0.0.1 mag framen (CSP), maar staat niet in de postMessage-allowlist: zo testen we de check in het script.
+				VE_FRAME_ANCESTORS: `${CMS_URL},${WEB_URL},${FOREIGN_WEB_URL}`,
+			},
 		},
 	],
 });

@@ -68,3 +68,24 @@ Elke beslissing: wat, waarom, alternatieven, bron. Bronpaden verwijzen naar de U
   levert alleen af bij de echte parent-origin). Na `init` alleen nog naar die ene origin.
 - **Waarom**: de opdracht verbiedt `*` na de handshake. Zo is `*` zelfs vóór de handshake niet nodig.
 - **Bron**: https://developer.mozilla.org/docs/Web/API/Window/postMessage ; Prepr Toolkit `packages/toolkit/src/core/iframe-bridge.ts` (patroon, niet gekopieerd).
+
+## D9 – Testopzet frontend: nep-parent op dezelfde server, vreemde origin via 127.0.0.1
+- **Wat**: `web/src/pages/test/harness.astro` (alleen met `VE_TEST_HARNESS=1`) laadt een sitepagina in een iframe en speelt
+  de backoffice. Voor "niet-toegestane origin" opent de test dezelfde nep-parent op `http://127.0.0.1:4321`: een andere
+  origin op dezelfde server.
+- **Waarom**: geen tweede server nodig. CSP `frame-ancestors` en de postMessage-allowlist zijn aparte instellingen
+  (`VE_FRAME_ANCESTORS` / `VE_ALLOWED_PARENT_ORIGINS`), zodat de test kan aantonen dat het **script zelf** op origin filtert.
+  Anders zou de CSP het iframe al blokkeren en test je alleen de CSP.
+- **Alternatief**: een tweede statische server op een andere poort (meer bewegende delen).
+
+## D10 – Bedieningselementen in bewerkbare elementen blijven werken
+- **Wat**: klikken op `button, input, select, textarea, label, summary, [data-umb-edit-ignore]` binnen een bewerkbaar element
+  gaan gewoon door. Alle andere klikken (ook op links) worden in edit-modus een edit-verzoek.
+- **Waarom**: de "Kopieer citaat"-knop moet in de preview blijven werken, en zo is ook een re-render van het
+  gehydrateerde component te testen. Links worden wel onderschept, omdat navigeren binnen de preview minder belangrijk is
+  dan bewerken. Prepr en Sanity doen dit vergelijkbaar.
+
+## D11 – Overlay in een eigen shadow root, één element
+- **Wat**: één `<umb-ve-overlay>` met een open shadow root, `position: fixed`, `pointer-events: none`.
+- **Waarom**: site-CSS en overlay-CSS raken elkaar niet. Er hoeft niets per element te worden toegevoegd, dus de DOM van de
+  site (en daarmee de Vue-hydration) blijft ongemoeid.

@@ -1,0 +1,122 @@
+---
+/**
+ * Nep-parent om het postMessage-protocol zonder Umbraco te testen (fase 2).
+ * Laadt een pagina van deze site in een iframe en speelt de rol van de backoffice.
+ *
+ *   /test/harness?target=/waarom-headless/&edit=1&auto=1&frame=http://localhost:4321
+ *
+ * Alleen beschikbaar met VE_TEST_HARNESS=1.
+ */
+import { config } from '../../lib/config';
+import { signPreviewToken } from '../../lib/preview';
+
+if (!config.testHarness) {
+	return new Response('Niet gevonden', { status: 404 });
+}
+
+const url = Astro.url;
+const target = url.searchParams.get('target') ?? '/';
+const edit = url.searchParams.get('edit') !== '0';
+const auto = url.searchParams.get('auto') !== '0';
+const frameOrigin = url.searchParams.get('frame') ?? 'http://localhost:4321';
+const query = new URLSearchParams({ preview: signPreviewToken(Math.floor(Date.now() / 1000) + 3600) });
+if (edit) query.set('ve', '1');
+const src = `${frameOrigin}${target}?${query}`;
+---
+
+<!doctype html>
+<html lang="nl">
+	<head>
+		<meta charset="utf-8" />
+		<title>Visual Editing – nep-parent</title>
+		<style>
+			body { margin: 0; font: 14px system-ui, sans-serif; display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+			header { padding: 8px 12px; background: #1b264f; color: #fff; }
+			iframe { width: 100%; height: 100%; border: 0; }
+		</style>
+	</head>
+	<body>
+		<header>Nep-parent (origin <code id="origin"></code>) → <code>{src}</code></header>
+		<iframe id="preview" src={src} data-edit={String(edit)} data-auto={String(auto)} data-frame-origin={frameOrigin}></iframe>
+		<script>
+			import {
+				createMessage,
+				isProtocolMessage,
+				type GetScrollMessage,
+				type InitMessage,
+				type ProtocolMessage,
+				type ScrollPosition,
+			} from '../../../../shared/protocol';
+
+			type Logged = { origin: string; data: ProtocolMessage };
+			const iframe = document.getElementById('preview') as HTMLIFrameElement;
+			const frameOrigin = iframe.dataset.frameOrigin!;
+			const editMode = iframe.dataset.edit === 'true';
+			const auto = iframe.dataset.auto === 'true';
+			document.getElementById('origin')!.textContent = location.origin;
+
+			const messages: Logged[] = [];
+			let pendingScroll: ScrollPosition | null = null;
+			const waiters: Array<{ match: (m: ProtocolMessage) => boolean; resolve: (m: ProtocolMessage) => void }> = [];
+
+			function send(message: unknown) {
+				iframe.contentWindow!.postMessage(message, frameOrigin);
+			}
+
+			function next(match: (m: ProtocolMessage) => boolean, timeout = 3000): Promise<ProtocolMessage | null> {
+				return new Promise((resolve) => {
+					const w = { match, resolve: (m: ProtocolMessage) => resolve(m) };
+					waiters.push(w);
+					setTimeout(() => {
+						const i = waiters.indexOf(w);
+						if (i >= 0) waiters.splice(i, 1);
+						resolve(null);
+					}, timeout);
+				});
+			}
+
+			addEventListener('message', (event) => {
+				// Zelfde regels als de backoffice: alleen van ons iframe en van de verwachte origin.
+				if (event.source !== iframe.contentWindow || event.origin !== frameOrigin) return;
+				if (!isProtocolMessage(event.data)) return;
+				messages.push({ origin: event.origin, data: event.data });
+				for (const w of [...waiters]) {
+					if (w.match(event.data)) {
+						waiters.splice(waiters.indexOf(w), 1);
+						w.resolve(event.data);
+					}
+				}
+				if (event.data.type === 'loaded' && auto) {
+					send(createMessage<InitMessage>('init', { editMode, scroll: pendingScroll }));
+					pendingScroll = null;
+				}
+			});
+
+			let counter = 0;
+			const harness = {
+				messages,
+				send,
+				init: (opts: { editMode?: boolean; scroll?: ScrollPosition | null } = {}) =>
+					send(createMessage<InitMessage>('init', { editMode: opts.editMode ?? editMode, scroll: opts.scroll ?? null })),
+				next,
+				async getScroll(): Promise<ScrollPosition | null> {
+					const requestId = `r${++counter}`;
+					const reply = next((m) => m.type === 'scroll' && m.requestId === requestId);
+					send(createMessage<GetScrollMessage>('getScroll', { requestId }));
+					const m = await reply;
+					return m && m.type === 'scroll' ? { x: m.x, y: m.y } : null;
+				},
+				/** Zoals de backoffice na opslaan: scrollpositie vragen, herladen, positie meegeven in init. */
+				async reload(): Promise<ProtocolMessage | null> {
+					pendingScroll = await harness.getScroll();
+					const ready = next((m) => m.type === 'ready', 10000);
+					const u = new URL(iframe.src);
+					u.searchParams.set('rnd', String(Date.now()));
+					iframe.src = u.toString();
+					return ready;
+				},
+			};
+			(window as unknown as { harness: typeof harness }).harness = harness;
+		</script>
+	</body>
+</html>

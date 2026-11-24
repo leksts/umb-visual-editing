@@ -17,13 +17,23 @@ export const manifests: Array<UmbExtensionManifest> = [
 		alias: 'VisualEditing.WorkspaceView.Document',
 		name: 'Visual Editing workspace view',
 		element: () => import('./visual-editing-workspace-view.element.js'),
-		weight: 150, // tussen "Content" (200) en "Info" (100); Content blijft de standaardweergave
+		// Vóór "Content" (200): de eerste weergave opent standaard, ook bij navigeren in de contentboom (D22).
+		weight: 250,
 		meta: {
 			label: 'Visual editing',
 			pathname: VISUAL_EDITING_VIEW_PATHNAME,
 			icon: 'icon-display',
 		},
-		conditions: [{ alias: UMB_WORKSPACE_CONDITION_ALIAS, match: 'Umb.Workspace.Document' }],
+		conditions: [
+			{ alias: UMB_WORKSPACE_CONDITION_ALIAS, match: 'Umb.Workspace.Document' },
+			{ alias: 'VisualEditing.Condition.HasFrontendPreview' },
+		],
+	},
+	{
+		type: 'condition',
+		alias: 'VisualEditing.Condition.HasFrontendPreview',
+		name: 'Visual Editing: document has a frontend preview',
+		api: () => import('./has-frontend-preview.condition.js'),
 	},
 	{
 		type: 'workspaceActionMenuItem',

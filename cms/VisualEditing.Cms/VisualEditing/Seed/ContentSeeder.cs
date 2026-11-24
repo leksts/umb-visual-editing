@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Umbraco.Cms.Core;
 using Umbraco.Cms.Core.Events;
 using Umbraco.Cms.Core.Models;
@@ -69,7 +70,8 @@ public sealed class ContentSeeder : INotificationAsyncHandler<UmbracoApplication
                 _logger.LogWarning("Visual Editing seed: de database is van een oudere seed (zonder geneste blocks). Stop de site en verwijder umbraco/Data/Umbraco.sqlite.db* om opnieuw te seeden.");
             }
 
-            _logger.LogInformation("Visual Editing seed: content bestaat al, overslaan.");
+            _logger.LogInformation("Visual Editing seed: content bestaat al.");
+            await ApplyUpgradesAsync();
             return;
         }
 
@@ -120,7 +122,86 @@ public sealed class ContentSeeder : INotificationAsyncHandler<UmbracoApplication
             Text("Tokens met een vervaltijd", Lorem(3)),
             Quote("Een iframe is een andere site dan je denkt.", "Cora Cookie"));
 
+        await ApplyUpgradesAsync();
         _logger.LogInformation("Visual Editing seed: klaar.");
+    }
+
+    /// <summary>
+    /// Latere uitbreidingen van de seed, ook toepasbaar op een bestaande database (zonder eigen content te verliezen):
+    /// blocktypes "Veelgestelde vraag" (uitklapblok) en "Wisselkoers" (externe API), toegevoegd aan de Block List en
+    /// als blocks 2 en 3 aan artikel B (DECISIONS.md D23). Idempotent op vaste keys.
+    /// </summary>
+    private async Task ApplyUpgradesAsync()
+    {
+        if (_contentTypeService.Get(SeedKeys.ExchangeRateBlockType) is not null)
+        {
+            return;
+        }
+
+        _logger.LogInformation("Visual Editing seed: upgrade met uitklapblok en wisselkoers.");
+        IDataType textBox = await FirstByEditor(Constants.PropertyEditors.Aliases.TextBox);
+        IDataType textArea = await FirstByEditor(Constants.PropertyEditors.Aliases.TextArea);
+        IContentType faq = await EnsureElementType(SeedKeys.FaqBlockType, "faqBlock", "Veelgestelde vraag", "icon-help-alt", ("question", "Vraag", textBox), ("answer", "Antwoord", textArea));
+        IContentType rate = await EnsureElementType(SeedKeys.ExchangeRateBlockType, "exchangeRateBlock", "Wisselkoers", "icon-coins", ("title", "Titel", textBox), ("currency", "Valuta", textBox));
+        await AllowInBlockList(SeedKeys.BlockListDataType, faq, rate);
+
+        IContent? article = _contentService.GetById(SeedKeys.ArticleB);
+        if (article?.GetValue<string>("blocks") is not { } json || json.Contains(SeedKeys.Block(2, 2).ToString()))
+        {
+            return;
+        }
+
+        JsonObject value = JsonNode.Parse(json)!.AsObject();
+        Dictionary<string, object?>[] extra =
+        [
+            new() { ["$type"] = SeedKeys.FaqBlockType, ["question"] = "Waarom staat dit antwoord in edit-modus open?", ["answer"] = "Een dichtgeklapt antwoord kun je niet aanklikken. In edit-modus is het uitklapblok daarom altijd open; in preview en live werkt het zoals de bezoeker het ziet." },
+            new() { ["$type"] = SeedKeys.ExchangeRateBlockType, ["title"] = "Koers van vandaag", ["currency"] = "USD" },
+        ];
+        var layout = value["layout"]![Constants.PropertyEditors.Aliases.BlockList]!.AsArray();
+        var contentData = value["contentData"]!.AsArray();
+        var expose = value["expose"]!.AsArray();
+        for (var i = 0; i < extra.Length; i++)
+        {
+            Guid key = SeedKeys.Block(2, layout.Count);
+            JsonObject block = JsonSerializer.SerializeToNode(BlockListObject(_ => key, null, [extra[i]]))!.AsObject();
+            layout.Add(block["layout"]![Constants.PropertyEditors.Aliases.BlockList]![0]!.DeepClone());
+            contentData.Add(block["contentData"]![0]!.DeepClone());
+            expose.Add(block["expose"]![0]!.DeepClone());
+        }
+
+        article.SetValue("blocks", value.ToJsonString());
+        SaveAndPublish(article);
+    }
+
+    /// <summary>Voegt element types toe aan de toegestane blocks van een bestaande Block List.</summary>
+    private async Task AllowInBlockList(Guid dataTypeKey, params IContentType[] elementTypes)
+    {
+        IDataType dataType = await _dataTypeService.GetAsync(dataTypeKey) ?? throw new InvalidOperationException("Block List niet gevonden.");
+        JsonArray blocks = JsonSerializer.SerializeToNode(dataType.ConfigurationData.TryGetValue("blocks", out var existing) ? existing : Array.Empty<object>())!.AsArray();
+        foreach (IContentType type in elementTypes)
+        {
+            if (blocks.Any(b => b?["contentElementTypeKey"]?.GetValue<string>() is { } k && Guid.Parse(k) == type.Key))
+            {
+                continue;
+            }
+
+            blocks.Add(new JsonObject
+            {
+                ["contentElementTypeKey"] = type.Key.ToString(),
+                ["label"] = BlockLabels.TryGetValue(type.Alias, out var label) ? label : type.Name ?? type.Alias,
+            });
+        }
+
+        var configuration = new Dictionary<string, object>(dataType.ConfigurationData)
+        {
+            ["blocks"] = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(blocks.ToJsonString())!,
+        };
+        dataType.ConfigurationData = configuration;
+        Attempt<IDataType, DataTypeOperationStatus> result = await _dataTypeService.UpdateAsync(dataType, UserKey);
+        if (!result.Success)
+        {
+            throw new InvalidOperationException($"Block List bijwerken mislukt: {result.Status}");
+        }
     }
 
     private void CreateArticle(IContent parent, Guid key, int n, string publishedTitle, string draftTitle, string intro, Guid mediaKey, params Dictionary<string, object?>[] blocks)
@@ -338,6 +419,8 @@ public sealed class ContentSeeder : INotificationAsyncHandler<UmbracoApplication
         ["textBlock"] = "Tekstblok: {umbValue: heading}",
         ["quoteBlock"] = "Citaat: {umbValue: author}",
         ["calloutBlock"] = "Uitgelicht: {umbValue: title}",
+        ["faqBlock"] = "Vraag: {umbValue: question}",
+        ["exchangeRateBlock"] = "Wisselkoers: {umbValue: currency}",
     };
 
     private void CopyAssets()

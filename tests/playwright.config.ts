@@ -39,6 +39,8 @@ export default defineConfig({
 				VE_TEST_HARNESS: '1',
 				// 127.0.0.1 mag framen (CSP), maar staat niet in de postMessage-allowlist: zo testen we de check in het script.
 				VE_FRAME_ANCESTORS: `${CMS_URL},${WEB_URL},${FOREIGN_WEB_URL}`,
+				// Wisselkoersblock: nep-API op een andere origin, zodat hij voor de browser extern is (render-modes.spec.ts).
+				RATES_API_URL: `${FOREIGN_WEB_URL}/test/rates.json`,
 			},
 		},
 	],

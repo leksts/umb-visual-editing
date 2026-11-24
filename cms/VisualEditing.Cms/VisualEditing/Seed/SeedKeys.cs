@@ -11,6 +11,8 @@ public static class SeedKeys
     public static readonly Guid TextBlockType = Guid.Parse("5e0d0000-0000-4000-8000-000000000003");
     public static readonly Guid QuoteBlockType = Guid.Parse("5e0d0000-0000-4000-8000-000000000004");
     public static readonly Guid CalloutBlockType = Guid.Parse("5e0d0000-0000-4000-8000-000000000005");
+    public static readonly Guid FaqBlockType = Guid.Parse("5e0d0000-0000-4000-8000-000000000006");
+    public static readonly Guid ExchangeRateBlockType = Guid.Parse("5e0d0000-0000-4000-8000-000000000007");
 
     public static readonly Guid BlockListDataType = Guid.Parse("5e0d0000-0000-4000-8000-000000000010");
     public static readonly Guid NestedBlockListDataType = Guid.Parse("5e0d0000-0000-4000-8000-000000000011");

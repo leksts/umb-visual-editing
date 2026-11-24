@@ -71,7 +71,13 @@ export function blockEdit(item: ApiContent | null | undefined, block: ApiBlockIt
 }
 
 function humanize(alias: string): string {
-	const known: Record<string, string> = { textBlock: 'Tekstblok', quoteBlock: 'Citaat', calloutBlock: 'Uitgelicht' };
+	const known: Record<string, string> = {
+		textBlock: 'Tekstblok',
+		quoteBlock: 'Citaat',
+		calloutBlock: 'Uitgelicht',
+		faqBlock: 'Vraag',
+		exchangeRateBlock: 'Wisselkoers',
+	};
 	return known[alias] ?? alias;
 }
 

@@ -21,6 +21,16 @@ export const config = {
 	frameAncestors: list(process.env.VE_FRAME_ANCESTORS, list(process.env.VE_ALLOWED_PARENT_ORIGINS, ['http://localhost:17575', 'http://localhost:4321'])),
 	/** 'api' = echte edit-metadata uit de Delivery API; 'mock' = in de frontend nagebootst (fase 2). */
 	metadataSource: (process.env.VE_METADATA_SOURCE ?? 'api') as 'api' | 'mock',
+	/**
+	 * Externe API van het wisselkoersblock (in de browser aangeroepen). Standaard een publieke API zonder sleutel; de
+	 * tests wijzen hem naar een nep-endpoint op een andere origin (zie pages/test/rates.json.ts).
+	 */
+	ratesApiUrl: process.env.RATES_API_URL ?? 'https://api.frankfurter.app/latest',
+	/**
+	 * Origins waarmee de browser in preview-modus verbinding mag maken (CSP connect-src, naast 'self'). In edit-modus
+	 * alleen 'self'; live geen beperking (D23). Standaard de origin van de wisselkoers-API.
+	 */
+	previewConnectSrc: list(process.env.VE_PREVIEW_CONNECT_SRC, [new URL(process.env.RATES_API_URL ?? 'https://api.frankfurter.app/latest').origin]),
 	/** Testpagina met nep-parent beschikbaar maken (alleen lokaal/test). */
 	testHarness: process.env.VE_TEST_HARNESS === '1',
 };

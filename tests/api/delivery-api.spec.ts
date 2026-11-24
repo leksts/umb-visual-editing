@@ -178,6 +178,6 @@ test.describe('fase 3: preview + edit-vlag', () => {
 		const seed = [KEYS.articleA, KEYS.articleB, KEYS.articleC];
 		expect(keys.filter((k) => seed.includes(k))).toEqual(seed);
 		const b = body.items.find((i: any) => i.id === KEYS.articleB).editMetadata;
-		expect(Object.keys(b.blocks)).toEqual([KEYS.block(2, 0), KEYS.block(2, 1)]);
+		expect(Object.keys(b.blocks)).toEqual([KEYS.block(2, 0), KEYS.block(2, 1), KEYS.block(2, 2), KEYS.block(2, 3)]);
 	});
 });

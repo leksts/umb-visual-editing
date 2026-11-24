@@ -1,12 +1,17 @@
 ---
 /**
  * Kiest per blocktype het Vue-component (ook voor geneste blocks, via Astro.self). Dit is "routing" van blocks en staat daarom in Astro:
- * alleen hier kan een client-directive worden gezet (QuoteBlock is interactief en wordt gehydrateerd).
+ * alleen hier kan een client-directive worden gezet (QuoteBlock en ExchangeRateBlock zijn interactief en worden gehydrateerd).
+ * Wat een component in preview en edit-modus mag, staat per blocktype in lib/render-mode.ts (BLOCK_POLICIES).
  */
 import TextBlock from './TextBlock.vue';
 import QuoteBlock from './QuoteBlock.vue';
 import CalloutBlock from './CalloutBlock.vue';
+import FaqBlock from './FaqBlock.vue';
+import ExchangeRateBlock from './ExchangeRateBlock.vue';
 import { blockEdit } from '../lib/edit-metadata';
+import { behaviorFor, renderMode } from '../lib/render-mode';
+import { config } from '../lib/config';
 import type { ApiBlockItem, ApiContent } from '../lib/umbraco';
 
 interface Props {
@@ -14,12 +19,17 @@ interface Props {
 	blocks: ApiBlockItem[];
 }
 const { item, blocks } = Astro.props;
+const mode = renderMode(Astro.locals.preview);
 ---
 
 {
 	blocks.map((block) => {
 		const p = block.content.properties as Record<string, string>;
 		const edit = blockEdit(item, block);
+		const behavior = behaviorFor(block.content.contentType, mode);
+		if (behavior === 'placeholder') {
+			return <div class="block-placeholder" data-block-type={block.content.contentType}>Component "{block.content.contentType}" is niet actief in deze modus.</div>;
+		}
 		switch (block.content.contentType) {
 			case 'textBlock':
 				return <TextBlock heading={p.heading} text={p.text} edit={edit} />;
@@ -34,6 +44,19 @@ const { item, blocks } = Astro.props;
 					</CalloutBlock>
 				);
 			}
+			case 'faqBlock':
+				return <FaqBlock question={p.question} answer={p.answer} mode={mode} edit={edit} />;
+			case 'exchangeRateBlock':
+				return (
+					<ExchangeRateBlock
+						client:load
+						title={p.title}
+						currency={p.currency}
+						apiUrl={config.ratesApiUrl}
+						behavior={behavior}
+						edit={edit}
+					/>
+				);
 			default:
 				return null;
 		}

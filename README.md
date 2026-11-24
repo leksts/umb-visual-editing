@@ -53,7 +53,8 @@ blocks wordt niet bijgewerkt (de CMS logt dan een waarschuwing): verwijder hem e
 3. Beweeg over de preview: bewerkbare elementen krijgen een kader met label. Klik op een element: rechts opent de juiste
    tab en het veld krijgt focus. Bij een veld in een block (bijvoorbeeld de auteur van een citaat) opent het block en
    krijgt dát veld focus, ook in een block binnen een block (het citaat in "Uitgelicht"). Een element van een ander document (zoals een artikelkaart op de homepage, ook als het een
-   link is) opent dat document in een modal; de preview blijft staan en ververst na opslaan.
+   link is) brengt je naar dát document, ook in Visual editing, met het veld in focus; "terug" in de browser brengt je
+   terug.
 4. Wijzig iets en klik **Save**: de preview herlaadt op dezelfde scrollpositie. In een block (ook genest) kan dat in
    één klik met **Update & save**: alle open blocks worden bijgewerkt en het document wordt opgeslagen.
 

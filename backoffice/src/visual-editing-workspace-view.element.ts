@@ -6,8 +6,6 @@ import {
 	UMB_EDIT_DOCUMENT_WORKSPACE_PATH_PATTERN,
 	type UmbDocumentWorkspaceContext,
 } from '@umbraco-cms/backoffice/document';
-import { UmbModalRouteRegistrationController } from '@umbraco-cms/backoffice/router';
-import { UMB_WORKSPACE_MODAL } from '@umbraco-cms/backoffice/workspace';
 import { UMB_PROPERTY_DATASET_CONTEXT } from '@umbraco-cms/backoffice/property';
 import { UMB_ACTION_EVENT_CONTEXT, type UmbActionEventContext } from '@umbraco-cms/backoffice/action';
 import { UmbEntityUpdatedEvent } from '@umbraco-cms/backoffice/entity-action';
@@ -18,7 +16,7 @@ import { createExtensionElement } from '@umbraco-cms/backoffice/extension-api';
 import type { UmbWorkspaceViewElement } from '@umbraco-cms/backoffice/workspace';
 import type { EditRequestMessage } from '../../shared/protocol';
 import { PreviewBridge } from './preview-bridge';
-import { focusTarget, modalScope, navigate, tabSegmentFor, type EditTarget } from './navigation';
+import { editorReady, focusTarget, navigate, tabSegmentFor, type EditTarget } from './navigation';
 import { VISUAL_EDITING_VIEW_PATHNAME } from './index';
 
 const URL_PROVIDER_ALIAS = 'VisualEditing';
@@ -26,10 +24,17 @@ const URL_PROVIDER_ALIAS = 'VisualEditing';
 const CONTENT_VIEW_ALIAS = 'Umb.WorkspaceView.Document.Edit';
 
 /**
+ * Edit-verzoek voor een ander document, af te handelen zodra die workspace geladen is. Bewust buiten het element:
+ * bij het wisselen van document kan de workspace een nieuw exemplaar van deze view maken.
+ */
+let pendingEdit: { target: EditTarget; at: number } | null = null;
+
+/**
  * Workspace-view "Visual editing": links de frontend-preview in een iframe, rechts de standaard content-editor van
  * Umbraco (hetzelfde element als de view "Content"). Klik in de preview → juiste tab en veld rechts; veld in een
- * block → het block wordt geopend en het veld krijgt focus; element van een ander document → dat document opent in
- * een modal, de preview blijft staan. Opslaan → iframe herlaadt met behoud van de scrollpositie.
+ * block → het block wordt geopend en het veld krijgt focus; element van een ander document (bv. een artikelkaart) →
+ * de backoffice gaat naar dát document, in deze weergave, en daar krijgt het veld focus (DECISIONS.md D18). Opslaan →
+ * iframe herlaadt met behoud van de scrollpositie.
  */
 @customElement('visual-editing-workspace-view')
 export class VisualEditingWorkspaceViewElement extends UmbLitElement implements UmbWorkspaceViewElement {
@@ -44,8 +49,6 @@ export class VisualEditingWorkspaceViewElement extends UmbLitElement implements 
 	#culture: string | null = null;
 	/** Documenten die op de getoonde pagina staan (uit "ready"); opslaan van één ervan herlaadt de preview. */
 	#previewDocuments = new Set<string>();
-	/** Route naar het workspace-modal (publieke modal-route-API, zoals document-item-ref.element.ts). */
-	#documentModalPath?: string;
 	#bridge = new PreviewBridge({
 		onReady: (documentKeys) => this.#onReady(documentKeys),
 		onEdit: (message) => this.#onEdit(message),
@@ -71,13 +74,6 @@ export class VisualEditingWorkspaceViewElement extends UmbLitElement implements 
 			if (!manifest || this._editor) return;
 			this._editor = await createExtensionElement(manifest as never);
 		}, '_observeContentView');
-		// Een ander document openen in een modal, met dezelfde publieke API als de documentlijst/content picker.
-		new UmbModalRouteRegistrationController(this, UMB_WORKSPACE_MODAL)
-			.addUniquePaths(['unique'])
-			.onSetup(() => ({ data: { entityType: UMB_DOCUMENT_ENTITY_TYPE, preset: {} } }))
-			.observeRouteBuilder((routeBuilder) => {
-				this.#documentModalPath = routeBuilder({});
-			});
 	}
 
 	override connectedCallback() {
@@ -96,6 +92,26 @@ export class VisualEditingWorkspaceViewElement extends UmbLitElement implements 
 		this.#unique = unique;
 		this._ready = false;
 		await this.#loadPreviewUrl();
+		await this.#handlePendingEdit(unique);
+	}
+
+	/**
+	 * Openstaand edit-verzoek voor dit document afhandelen. Bij het wisselen van document maakt de workspace een nieuw
+	 * exemplaar van deze view; het verzoek wordt daarom pas opgeruimd door het exemplaar dat nog op de pagina staat.
+	 * De router en de editor zijn dan nog bezig: pas naar de tab navigeren als de editor properties toont, anders
+	 * draait de router die navigatie terug.
+	 */
+	async #handlePendingEdit(unique: string) {
+		if (!pendingEdit || pendingEdit.target.documentKey !== unique) return;
+		if (Date.now() - pendingEdit.at > 15_000) {
+			pendingEdit = null;
+			return;
+		}
+		await editorReady(() => this.renderRoot.querySelector('#editor'));
+		if (!this.isConnected || pendingEdit?.target.documentKey !== unique) return;
+		const { target } = pendingEdit;
+		pendingEdit = null;
+		await this.#focusOwn(target, { replace: true }); // "terug" gaat dan in één stap naar de vorige pagina
 	}
 
 	/** Preview-URL via de standaard Management API-endpoint en onze URL-provider (DECISIONS.md D5). */
@@ -163,21 +179,27 @@ export class VisualEditingWorkspaceViewElement extends UmbLitElement implements 
 		};
 		this.dispatchEvent(new CustomEvent('visual-editing-edit', { detail: target, bubbles: true, composed: true }));
 		if (!target.propertyAlias) return;
-		const base = location.pathname.split(`/view/${VISUAL_EDITING_VIEW_PATHNAME}`)[0] + `/view/${VISUAL_EDITING_VIEW_PATHNAME}`;
 
 		if (target.documentKey === this.#unique) {
-			// Eigen document: juiste tab in de editor naast de preview (sluit ook een open modal), dan veld focussen.
-			const segment = this.#workspace ? await tabSegmentFor(this.#workspace, target.propertyAlias) : null;
-			navigate(segment ? `${base}/${segment}` : base);
-			await focusTarget(() => this.renderRoot.querySelector('#editor'), target);
+			await this.#focusOwn(target);
 			return;
 		}
 
-		// Ander document (bv. een artikelkaart op de homepage): open het in een modal; de preview blijft staan.
-		if (!this.#documentModalPath) return;
-		const modal = `${this.#documentModalPath.replace(/\/?$/, '/')}${UMB_EDIT_DOCUMENT_WORKSPACE_PATH_PATTERN.generateLocal({ unique: target.documentKey })}`;
-		navigate(new URL(modal, location.href).pathname);
-		await focusTarget(modalScope, target, { tryTabs: true });
+		// Ander document (bv. een artikelkaart op de homepage): naar dat document in deze weergave. De preview toont
+		// dan de pagina van dat document; het veld krijgt focus zodra die workspace geladen is (#setUnique). Via de
+		// geschiedenis, dus "terug" brengt de redacteur bij de vorige pagina.
+		pendingEdit = { target, at: Date.now() };
+		const root = location.pathname.split('/section/')[0];
+		const documentPath = UMB_EDIT_DOCUMENT_WORKSPACE_PATH_PATTERN.generateAbsolute({ unique: target.documentKey });
+		navigate(`${root}/${documentPath}/${target.culture ?? 'invariant'}/view/${VISUAL_EDITING_VIEW_PATHNAME}`.replace(/\/{2,}/g, '/'));
+	}
+
+	/** Eigen document: juiste tab in de editor naast de preview (sluit ook een open modal), dan veld focussen. */
+	async #focusOwn(target: EditTarget, opts: { replace?: boolean } = {}) {
+		const base = location.pathname.split(`/view/${VISUAL_EDITING_VIEW_PATHNAME}`)[0] + `/view/${VISUAL_EDITING_VIEW_PATHNAME}`;
+		const segment = this.#workspace && target.propertyAlias ? await tabSegmentFor(this.#workspace, target.propertyAlias) : null;
+		navigate(segment ? `${base}/${segment}` : base, opts);
+		await focusTarget(() => this.renderRoot.querySelector('#editor'), target);
 	}
 
 	override render() {

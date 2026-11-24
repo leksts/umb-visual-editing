@@ -39,9 +39,11 @@ export async function tabSegmentFor(workspace: UmbDocumentWorkspaceContext, prop
 	return 'root';
 }
 
-export function navigate(path: string) {
+/** `replace`: geen nieuwe stap in de geschiedenis (bv. de tab direct na het wisselen van document). */
+export function navigate(path: string, opts: { replace?: boolean } = {}) {
 	if (location.pathname === path) return;
-	history.pushState(null, '', path);
+	if (opts.replace) history.replaceState(null, '', path);
+	else history.pushState(null, '', path);
 }
 
 /** Zoekt door alle (open) shadow roots heen. */
@@ -81,11 +83,19 @@ async function waitFor<T>(find: () => T | null, timeoutMs = 5000): Promise<T | n
 	return null;
 }
 
+/** Wacht tot de editor properties toont (de workspace van een net geopend document is geladen). */
+export async function editorReady(getScope: () => ParentNode | null, timeoutMs = 10000) {
+	await waitFor(() => {
+		const scope = getScope();
+		return scope ? deepQuery(scope, (el) => el.localName === 'umb-property') : null;
+	}, timeoutMs);
+	await new Promise((r) => requestAnimationFrame(r));
+}
+
 /**
  * Brengt het veld van een edit-verzoek in beeld en geeft het focus.
- * - `getScope` levert de editor waarin gezocht wordt: de editor naast de preview, of het modal met een ander document.
- * - property op het document: `umb-property` met die alias. Staat hij niet op de zichtbare tab en is `tryTabs` aan,
- *   dan worden de tabs van die editor één voor één geopend (hun eigen links).
+ * - `getScope` levert de editor waarin gezocht wordt (de editor naast de preview).
+ * - property op het document: `umb-property` met die alias (de juiste tab is al gekozen door de aanroeper).
  * - veld in een block: het block-item in de Block List-property, geopend via zijn eigen edit-link (dezelfde routed
  *   modal als een klik op het item), en daarin de property van het block. Bij een genest block (`blockPath`) gebeurt
  *   dat per niveau: in elk geopend modal de volgende Block List-property, tot en met het binnenste block.
@@ -94,7 +104,6 @@ async function waitFor<T>(find: () => T | null, timeoutMs = 5000): Promise<T | n
 export async function focusTarget(
 	getScope: () => ParentNode | null,
 	target: EditTarget,
-	opts: { tryTabs?: boolean } = {},
 ): Promise<HTMLElement | null> {
 	if (!target.propertyAlias) return null;
 	const alias = target.propertyAlias;
@@ -103,17 +112,16 @@ export async function focusTarget(
 		return scope ? deepQuery<HTMLElement>(scope, isProperty(alias)) : null;
 	};
 
-	let property = await waitFor(find, opts.tryTabs ? 2000 : 5000);
-	if (!property && opts.tryTabs) {
-		const scope = getScope();
-		const tabs = scope ? deepQueryAll(scope, (el) => el.localName === 'uui-tab' && !!el.getAttribute('href')) : [];
-		for (const tab of tabs) {
-			navigate(new URL(tab.getAttribute('href')!, location.href).pathname);
-			property = await waitFor(find, 1500);
-			if (property) break;
-		}
+	// Na een tab-navigatie kan de router de editor nog een keer opnieuw opbouwen; een veld dat dan al gevonden (en
+	// gefocust) is, verdwijnt en de focus valt terug naar body. Daarom: zoeken tot het gevonden veld blijft staan.
+	let property: HTMLElement | null = null;
+	for (let attempt = 0; attempt < 5; attempt++) {
+		property = await waitFor(find);
+		if (!property) return null;
+		await new Promise((r) => setTimeout(r, 250));
+		if (property.isConnected) break;
 	}
-	if (!property) return null;
+	if (!property?.isConnected) return null;
 
 	if (!target.blockKey) {
 		await focusField(property);
@@ -181,9 +189,6 @@ async function openBlockAndFind(entry: HTMLElement, blockPropertyAlias: string):
 	}
 	return null;
 }
-
-/** Het bovenste open modal (block- of document-workspace) als zoekgebied. */
-export const modalScope = (): ParentNode | null => topModal();
 
 /** Zoekt een property in het bovenste open modal, zodra dat een ander modal is dan `notIn`. */
 async function findInModal(propertyAlias: string, timeoutMs = 5000, notIn: Element | null = null): Promise<HTMLElement | null> {

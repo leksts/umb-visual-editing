@@ -96,8 +96,8 @@ https://learn.microsoft.com/dotnet/standard/serialization/system-text-json/custo
   focus + tijdelijke markering. Dat hangt af van interne DOM-structuur. Het is een risico en staat daarom geïsoleerd in één functie.
 - Block: geen stabiele publieke URL voor de block-workspace-modal. Uitgevoerd: het block-item zoeken en openen via zijn
   eigen edit-link, en in het modal het veld van het block focussen (DECISIONS.md D16).
-- Ander document: openen in een workspace-modal via `UmbModalRouteRegistrationController` + `UMB_WORKSPACE_MODAL`
-  (DECISIONS.md D18), zodat de preview blijft staan.
+- Ander document: navigeren naar dat document in de weergave Visual editing, met veldfocus (DECISIONS.md D18; een
+  tussenversie met een workspace-modal is teruggedraaid).
 
 ### 1.6 Weten dat het document is opgeslagen
 

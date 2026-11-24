@@ -151,17 +151,24 @@ Elke beslissing: wat, waarom, alternatieven, bron. Bronpaden verwijzen naar de U
 - **Bron**: spike in de draaiende backoffice 18.3.2 (link `…/modal/umb-modal-workspace/invariant/{property}/block/edit/{key}/view/content`),
   `content-type-structure-manager.class.d.ts`.
 
-## D18 – Element van een ander document: openen in een workspace-modal, preview blijft staan
-- **Wat**: een klik op een element van een ander document (bv. een artikelkaart, die ook een link is) opent dat document
-  in een modal via `UmbModalRouteRegistrationController` + `UMB_WORKSPACE_MODAL` (`edit/{key}`), dezelfde publieke API
-  als `document-item-ref.element.ts`. Het juiste veld krijgt focus; staat het niet op de zichtbare tab, dan worden de
-  tabs van dat modal geprobeerd. De frontend meldt in `ready` welke documenten op de pagina staan (`documentKeys`,
-  additief binnen protocolversie 1). Opslaan van één daarvan herlaadt de preview.
-- **Waarom**: de eerste versie navigeerde de backoffice naar het andere document, waardoor de preview naar die pagina
-  sprong. Dat voelde als "de link volgen", en de redacteur verloor de pagina waarmee die bezig was. Het iframe zelf
-  volgde de link niet (de klik wordt tegengehouden); dat is nu ook expliciet getest.
-- **Alternatieven**: navigeren naar het andere document (eerste versie); het andere document in het rechterpaneel laden
-  (vereist een tweede workspace-context; complex).
+## D18 – Element van een ander document: naar dat document in Visual editing (modal teruggedraaid)
+- **Wat**: een klik op een element van een ander document (bv. een artikelkaart op de homepage) navigeert de
+  backoffice naar dát document, in de weergave Visual editing. De preview toont dan de pagina van dat document en het
+  veld krijgt focus. "Terug" in de browser brengt de redacteur in één stap terug (de tab-navigatie na het wisselen
+  gebruikt `replaceState`). De frontend blijft in `ready` melden welke documenten op de pagina staan (`documentKeys`):
+  wordt één ervan elders opgeslagen, dan herlaadt de preview.
+- **Geschiedenis**: eerst navigeerde de backoffice naar het andere document in de standaard Content-weergave (de
+  preview "sprong" mee). Daarna (na feedback) opende het document in een workspace-modal, zodat de preview bleef
+  staan. Dat modal bleek bijna de hele Umbraco-interface te zijn (tabs Content/Visual editing/Info, breadcrumbs), en
+  de content van het artikel staat niet op de homepage maar op de artikelpagina: navigeren is daar terecht. Op
+  verzoek van de opdrachtgever teruggedraaid naar navigeren, nu wel naar Visual editing en met veldfocus.
+- **Hoe**: het edit-verzoek wordt module-breed bewaard (`pendingEdit`, met tijdstempel, max. 15 s), want bij het
+  wisselen van document maakt de workspace een nieuw exemplaar van de view. Alleen het exemplaar dat op de pagina
+  staat handelt het af: wachten tot de editor properties toont (anders draait de router de tab-navigatie terug), dan
+  tab en veld. `focusTarget` wacht tot het gevonden veld blijft staan (na een tab-navigatie bouwt de router de editor
+  soms nog een keer op, en dan viel de focus terug naar body).
+- **Alternatieven**: workspace-modal (vorige versie, te zwaar); een kale editor met alleen de velden in een modal
+  (geen publieke API; zou weer op interne DOM leunen).
 
 ## D19 – Geneste blocks: platte metadata met ouder-verwijzing, pad in het edit-bericht
 - **Wat**:

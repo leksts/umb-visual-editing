@@ -152,32 +152,24 @@ test.describe('fase 4: visual editing in de backoffice', () => {
 		}
 	});
 
-	test('klik op een artikelkaart (link) op home → artikel in een modal, preview blijft op home', async ({ page }) => {
+	test('klik op een artikelkaart (link) op home → naar het artikel in Visual editing, titel in focus; terug → home', async ({ page }) => {
 		await page.goto(documentViewUrl(KEYS.home, 'visual-editing'));
 		await expect(ready(page)).toBeVisible({ timeout: 30_000 });
 		const frame = preview(page);
-		const homeTitle = await frame.locator('h1').textContent();
-		const cardTitle = frame.locator(`.card a[data-umb-doc="${B}"][data-umb-prop="title"]`);
+		await frame.locator(`.card a[data-umb-doc="${B}"][data-umb-prop="title"]`).click();
 
-		await cardTitle.click();
-		// Het artikel opent in een modal; het iframe is de link NIET gevolgd.
-		await expect(page).toHaveURL(new RegExp(`/edit/${KEYS.home}/invariant/view/visual-editing/modal/.*/edit/${B}`));
-		await expect(frame.locator('h1')).toHaveText(homeTitle!);
-		expect(await frame.locator('body').evaluate(() => location.pathname)).toBe('/');
+		// De backoffice gaat naar artikel B (geen modal); de preview toont de artikelpagina en de titel heeft focus.
+		await expect(page).toHaveURL(new RegExp(`/edit/${B}/invariant/view/visual-editing/tab/inhoud$`));
+		await expect(page.locator('umb-workspace-modal')).toHaveCount(0);
+		await expect(ready(page)).toBeVisible({ timeout: 30_000 });
+		await expect(frame.locator('h1')).toHaveText('Componenten als contract');
+		expect(await frame.locator('body').evaluate(() => location.pathname)).toBe('/componenten-als-contract/');
 		await expectFocus(page, 'title', 'Componenten als contract');
 
-		// Opslaan in de modal ververst de homepage-preview (artikel B staat op de pagina).
-		const edited = `Componenten als contract (bewerkt ${Date.now()})`;
-		await page.keyboard.press('Control+A');
-		await page.keyboard.type(edited);
-		await modal(page).getByRole('button', { name: /^(save|opslaan)$/i }).click();
-		await expect(cardTitle).toHaveText(edited, { timeout: 20_000 });
+		// Terug in de browser: weer de homepage.
+		await page.goBack();
+		await expect(page).toHaveURL(new RegExp(`/edit/${KEYS.home}/invariant/view/visual-editing`));
+		await expect(ready(page)).toBeVisible({ timeout: 30_000 });
 		expect(await frame.locator('body').evaluate(() => location.pathname)).toBe('/');
-
-		// Opruimen.
-		const input = modal(page).locator('umb-property[data-mark="property:title"] input');
-		await input.fill('Componenten als contract');
-		await modal(page).getByRole('button', { name: /^(save|opslaan)$/i }).click();
-		await expect(cardTitle).toHaveText('Componenten als contract', { timeout: 20_000 });
 	});
 });

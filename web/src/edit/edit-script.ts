@@ -6,6 +6,7 @@
  *   Na "init" wordt alleen nog met die ene origin gepraat.
  * - Detecteert bewerkbare elementen (data-umb-*), ook na hydration en DOM-wijzigingen (MutationObserver).
  * - Tekent een hover-overlay met label, en stuurt bij een klik een "edit"-bericht.
+ * - Toont bij een block "+"-knoppen erboven en eronder; een klik stuurt een "add"-bericht (block invoegen).
  * - Beantwoordt "getScroll" en herstelt de scrollpositie uit "init".
  */
 import {
@@ -14,6 +15,7 @@ import {
 	isProtocolMessage,
 	normalizeOrigin,
 	parseBlockPath,
+	type AddRequestMessage,
 	type EditRequestMessage,
 	type FrontendToParentMessage,
 	type ProtocolMessage,
@@ -39,6 +41,8 @@ declare global {
 }
 
 const EDITABLE_SELECTOR = `[${A.document}]`;
+/** Het root-element van een block (niet een veld erin). */
+const BLOCK_ROOT_SELECTOR = `[${A.block}]:not([${A.blockProperty}])`;
 /** Bedieningselementen binnen een bewerkbaar element blijven gewoon werken (bv. "Kopieer citaat"). */
 const PASSTHROUGH_SELECTOR = 'button, input, select, textarea, label, summary, [data-umb-edit-ignore]';
 
@@ -52,7 +56,7 @@ export function startVisualEditing(): void {
 	window.__umbVisualEditing = state;
 
 	const inIframe = window.parent !== window;
-	const overlay = new Overlay();
+	const overlay = new Overlay((block, position) => sendAdd(block, position));
 	const registry = new Set<HTMLElement>();
 	let hovered: HTMLElement | null = null;
 
@@ -146,7 +150,7 @@ export function startVisualEditing(): void {
 			m.addedNodes.forEach((n) => n instanceof HTMLElement && scan(n));
 		}
 		prune();
-		if (hovered) overlay.show(hovered);
+		if (hovered) overlay.show(hovered, hovered.closest<HTMLElement>(BLOCK_ROOT_SELECTOR));
 	});
 
 	// ---- overlay en klik --------------------------------------------------------------------------------------
@@ -158,13 +162,31 @@ export function startVisualEditing(): void {
 
 	function setHovered(el: HTMLElement | null) {
 		hovered = el;
-		if (el && state.editMode) overlay.show(el);
+		if (el && state.editMode) overlay.show(el, el.closest<HTMLElement>(BLOCK_ROOT_SELECTOR));
 		else overlay.hide();
 	}
 
 	function onPointerOver(event: PointerEvent | MouseEvent) {
 		if (!state.editMode) return;
+		// Over de eigen "+"-knoppen (in de overlay): de huidige selectie laten staan.
+		if (event.target === overlay.host) return;
 		setHovered(editableFrom(event.target));
+	}
+
+	function sendAdd(block: HTMLElement, position: 'before' | 'after') {
+		if (!state.editMode) return;
+		const blockPath = parseBlockPath(block.getAttribute(A.blockPath));
+		send(
+			createMessage<AddRequestMessage>('add', {
+				entityType: 'document',
+				documentKey: block.getAttribute(A.document)!,
+				culture: block.getAttribute(A.culture),
+				propertyAlias: block.getAttribute(A.property)!,
+				blockKey: block.getAttribute(A.block)!,
+				...(blockPath ? { blockPath } : {}),
+				position,
+			}),
+		);
 	}
 
 	function onPointerLeaveDocument(event: MouseEvent) {
@@ -214,18 +236,25 @@ export function startVisualEditing(): void {
 	document.addEventListener('mouseover', onPointerOver, true);
 	document.addEventListener('mouseout', onPointerLeaveDocument, true);
 	document.addEventListener('click', onClick, true);
-	addEventListener('scroll', () => hovered && overlay.show(hovered), { passive: true });
-	addEventListener('resize', () => hovered && overlay.show(hovered));
+	const reposition = () => hovered && overlay.show(hovered, hovered.closest<HTMLElement>(BLOCK_ROOT_SELECTOR));
+	addEventListener('scroll', reposition, { passive: true });
+	addEventListener('resize', reposition);
 	announceLoaded();
 }
 
-/** Eén overlay-element in een eigen shadow root, zodat site-CSS er niet bij kan (en andersom). */
+/**
+ * Eén overlay-element in een eigen shadow root, zodat site-CSS er niet bij kan (en andersom). Tekent het kader om het
+ * element onder de muis, en bij een block twee "+"-knoppen (boven en onder het block) om een block in te voegen.
+ */
 class Overlay {
 	#host: HTMLElement;
 	#box: HTMLElement;
 	#label: HTMLElement;
+	#addBefore: HTMLButtonElement;
+	#addAfter: HTMLButtonElement;
+	#block: HTMLElement | null = null;
 
-	constructor() {
+	constructor(onAdd: (block: HTMLElement, position: 'before' | 'after') => void) {
 		this.#host = document.createElement('umb-ve-overlay');
 		this.#host.setAttribute('data-umb-edit-ignore', '');
 		const shadow = this.#host.attachShadow({ mode: 'open' });
@@ -238,14 +267,34 @@ class Overlay {
 				.label { position: absolute; left: -2px; bottom: 100%; margin-bottom: 4px; white-space: nowrap;
 					font: 600 12px/1.4 system-ui, sans-serif; color: #fff; background: #3544b1; padding: 2px 8px; border-radius: 3px; }
 				.box.below .label { bottom: auto; top: 100%; margin: 4px 0 0; }
+				.add { position: fixed; display: none; pointer-events: auto; transform: translate(-50%, -50%);
+					width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+					font: 600 18px/24px system-ui, sans-serif; color: #fff; background: #3544b1;
+					box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
+				.add:hover, .add:focus-visible { background: #1b264f; outline: 2px solid #fff; }
 			</style>
-			<div class="box" part="box"><span class="label" part="label"></span></div>`;
+			<div class="box" part="box"><span class="label" part="label"></span></div>
+			<button type="button" class="add before" part="add" aria-label="Block hierboven invoegen" title="Block hierboven invoegen">+</button>
+			<button type="button" class="add after" part="add" aria-label="Block hieronder invoegen" title="Block hieronder invoegen">+</button>`;
 		this.#box = shadow.querySelector('.box')!;
 		this.#label = shadow.querySelector('.label')!;
+		this.#addBefore = shadow.querySelector('.add.before')!;
+		this.#addAfter = shadow.querySelector('.add.after')!;
+		for (const [button, position] of [[this.#addBefore, 'before'], [this.#addAfter, 'after']] as const) {
+			button.addEventListener('click', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				if (this.#block) onAdd(this.#block, position);
+			});
+		}
 		document.body.appendChild(this.#host);
 	}
 
-	show(el: HTMLElement) {
+	get host() {
+		return this.#host;
+	}
+
+	show(el: HTMLElement, block: HTMLElement | null = null) {
 		const r = el.getBoundingClientRect();
 		Object.assign(this.#box.style, {
 			display: 'block',
@@ -257,11 +306,27 @@ class Overlay {
 		this.#box.classList.toggle('below', r.top < 28);
 		this.#label.textContent = el.getAttribute(A.label) || el.getAttribute(A.property) || 'Bewerken';
 		this.#host.setAttribute('data-target-label', this.#label.textContent);
+		this.#showAdd(block);
+	}
+
+	#showAdd(block: HTMLElement | null) {
+		this.#block = block;
+		if (!block) {
+			this.#addBefore.style.display = this.#addAfter.style.display = 'none';
+			this.#host.removeAttribute('data-add-block');
+			return;
+		}
+		const r = block.getBoundingClientRect();
+		const x = `${r.left + r.width / 2}px`;
+		Object.assign(this.#addBefore.style, { display: 'block', left: x, top: `${r.top}px` });
+		Object.assign(this.#addAfter.style, { display: 'block', left: x, top: `${r.bottom}px` });
+		this.#host.setAttribute('data-add-block', block.getAttribute(A.block) ?? '');
 	}
 
 	hide() {
 		this.#box.style.display = 'none';
 		this.#host.removeAttribute('data-target-label');
+		this.#showAdd(null);
 	}
 
 	flash() {

@@ -1,7 +1,7 @@
 # FINDINGS
 
 Bevindingen uit de PoC "Visual Editing voor headless Umbraco 18" (Umbraco 18.3.2, Astro 7.4, Vue 3.5).
-Resultaat: alle vier de doelen werken lokaal en worden aangetoond met 48 geautomatiseerde tests (`npm test`).
+Resultaat: alle vier de doelen werken lokaal en worden aangetoond met 56 geautomatiseerde tests (`npm test`).
 
 ## Wat goed werkte
 
@@ -40,6 +40,10 @@ Resultaat: alle vier de doelen werken lokaal en worden aangetoond met 48 geautom
   mét gecodeerde schuine streep vooraan; een gewone pagina die met `preview-` begint, juist alleen zónder (D20).
 - **Block-wijzigingen zijn niet live.** Pas na Update komen ze in het document, en de doorgifte naar het ouder-block is
   asynchroon. Een knop die meerdere niveaus bijwerkt, moet daarop wachten (D21).
+- **Welke weergave standaard opent.** Umbraco opent altijd de eerste weergave; onthouden welke de redacteur koos kan
+  niet zonder de routering te onderscheppen. Vooraan zetten met een condition is wel publiek (D22).
+- **Interactieve componenten in preview.** Geen platform beslist dit voor je; het moet per component (D23). Een CSP
+  `connect-src` in preview en edit-modus maakt afspraken afdwingbaar.
 - **Schijfruimte en Playwright-browserversies** op de ontwikkelmachine: niet inhoudelijk, wel tijdrovend.
 
 ## Wat niet kon in Umbraco 18, en de gekozen workaround
@@ -57,6 +61,10 @@ Resultaat: alle vier de doelen werken lokaal en worden aangetoond met 48 geautom
 Er is geen afwijking van de vaste keuzes van de opdracht nodig geweest.
 
 ## Bekende beperkingen van de PoC
+
+- "+" in de preview voegt blocks toe in een Block List; nieuwe documenten aanmaken kan vanuit de preview nog niet (D24).
+- Gedrag per modus is vastgelegd voor de blocktypes van de seed; componenten buiten blocks (header, kaarten) volgen
+  live. Analytics/tracking zit niet in de PoC; dat hoort buiten live uit te staan (in de layout).
 
 - Edit-metadata alleen voor top-level items. Geneste content via `expand` en Element Picker-/Library-elementen (nieuw
   in v18, eigen entiteit en workspace) krijgen nog geen metadata. Block Grid is buiten scope.

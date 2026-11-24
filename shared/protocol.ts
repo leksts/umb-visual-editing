@@ -59,6 +59,21 @@ export interface EditRequestMessage extends Envelope<'edit'> {
 	blockPath?: BlockPathStep[];
 }
 
+/**
+ * frontend → parent. Redacteur klikte op "+" boven of onder een block: een nieuw block invoegen op die plek.
+ * Optioneel bericht (additief binnen versie 1). Velden zoals bij `edit`; `blockKey` is het block waarnaast wordt
+ * ingevoegd, `blockPath` (bij geneste blocks) het pad ernaartoe.
+ */
+export interface AddRequestMessage extends Envelope<'add'> {
+	entityType: 'document';
+	documentKey: string;
+	culture: string | null;
+	propertyAlias: string;
+	blockKey: string;
+	blockPath?: BlockPathStep[];
+	position: 'before' | 'after';
+}
+
 /** parent → frontend. Vraag de huidige scrollpositie op (vlak voor herladen). */
 export interface GetScrollMessage extends Envelope<'getScroll'> {
 	requestId: string;
@@ -69,7 +84,7 @@ export interface ScrollMessage extends Envelope<'scroll'>, ScrollPosition {
 	requestId: string;
 }
 
-export type FrontendToParentMessage = LoadedMessage | ReadyMessage | EditRequestMessage | ScrollMessage;
+export type FrontendToParentMessage = LoadedMessage | ReadyMessage | EditRequestMessage | AddRequestMessage | ScrollMessage;
 export type ParentToFrontendMessage = InitMessage | GetScrollMessage;
 export type ProtocolMessage = FrontendToParentMessage | ParentToFrontendMessage;
 

@@ -2,6 +2,7 @@ import {
 	createMessage,
 	isProtocolMessage,
 	normalizeOrigin,
+	type AddRequestMessage,
 	type EditRequestMessage,
 	type GetScrollMessage,
 	type InitMessage,
@@ -13,6 +14,8 @@ export interface PreviewBridgeCallbacks {
 	/** documentKeys: documenten met bewerkbare elementen op de getoonde pagina. */
 	onReady(documentKeys: string[]): void;
 	onEdit(message: EditRequestMessage): void;
+	/** "+" bij een block in de preview: een block invoegen. */
+	onAdd(message: AddRequestMessage): void;
 }
 
 /**
@@ -86,6 +89,9 @@ export class PreviewBridge {
 				break;
 			case 'edit':
 				this.#callbacks.onEdit(message);
+				break;
+			case 'add':
+				if (message.position === 'before' || message.position === 'after') this.#callbacks.onAdd(message);
 				break;
 			case 'scroll': {
 				const resolve = this.#scrollRequests.get(message.requestId);

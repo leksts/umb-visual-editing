@@ -152,6 +152,35 @@ test.describe('fase 4: visual editing in de backoffice', () => {
 		}
 	});
 
+	test('"+" onder een block in de preview → Umbraco-keuzevenster voor een nieuw block op die plek', async ({ page }) => {
+		await page.goto(documentViewUrl(A, 'visual-editing'));
+		await expect(ready(page)).toBeVisible({ timeout: 30_000 });
+		const frame = preview(page);
+		const overlay = frame.locator('umb-ve-overlay');
+		const anyModal = page.locator('uui-modal-sidebar, uui-modal-dialog');
+
+		// Eerste niveau: onder het citaat (index 2) → invoegen op index 3.
+		await frame.locator(`[data-umb-block="${QUOTE}"] blockquote`).hover();
+		await overlay.locator('.add.after').click();
+		await expect(page).toHaveURL(new RegExp(`/view/visual-editing/tab/blocks/.*_catalogue/create/3/?$`));
+		await expect(html(page)).toHaveAttribute('data-visual-editing-add-index', '3');
+		await expect(anyModal.first()).toHaveAttribute('is-open', /.*/);
+		while ((await anyModal.count()) > 0) {
+			await page.keyboard.press('Escape');
+			await page.waitForTimeout(300);
+		}
+
+		// Genest: onder het laatste item van Uitgelicht → het Uitgelicht-block open, invoegen aan het eind (-1).
+		await frame.locator(`[data-umb-block="${NESTED_QUOTE}"] figcaption`).hover();
+		await overlay.locator('.add.after').click();
+		await expect(page).toHaveURL(new RegExp(`/block/edit/${CALLOUT}/.*_catalogue/create/-1/?$`));
+		await expect(html(page)).toHaveAttribute('data-visual-editing-add-block', NESTED_QUOTE);
+		while ((await anyModal.count()) > 0) {
+			await page.keyboard.press('Escape');
+			await page.waitForTimeout(300);
+		}
+	});
+
 	test('klik op een artikelkaart (link) op home → naar het artikel in Visual editing, titel in focus; terug → home', async ({ page }) => {
 		await page.goto(documentViewUrl(KEYS.home, 'visual-editing'));
 		await expect(ready(page)).toBeVisible({ timeout: 30_000 });

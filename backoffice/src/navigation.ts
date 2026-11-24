@@ -112,16 +112,8 @@ export async function focusTarget(
 		return scope ? deepQuery<HTMLElement>(scope, isProperty(alias)) : null;
 	};
 
-	// Na een tab-navigatie kan de router de editor nog een keer opnieuw opbouwen; een veld dat dan al gevonden (en
-	// gefocust) is, verdwijnt en de focus valt terug naar body. Daarom: zoeken tot het gevonden veld blijft staan.
-	let property: HTMLElement | null = null;
-	for (let attempt = 0; attempt < 5; attempt++) {
-		property = await waitFor(find);
-		if (!property) return null;
-		await new Promise((r) => setTimeout(r, 250));
-		if (property.isConnected) break;
-	}
-	if (!property?.isConnected) return null;
+	const property = await stableProperty(find);
+	if (!property) return null;
 
 	if (!target.blockKey) {
 		await focusField(property);
@@ -164,6 +156,88 @@ export async function focusTarget(
 		container = found;
 	}
 	return null;
+}
+
+/**
+ * Na een tab-navigatie kan de router de editor nog een keer opnieuw opbouwen; een veld dat dan al gevonden (en
+ * gefocust) is, verdwijnt en de focus valt terug naar body. Daarom: zoeken tot het gevonden element blijft staan.
+ */
+async function stableProperty(find: () => HTMLElement | null): Promise<HTMLElement | null> {
+	for (let attempt = 0; attempt < 5; attempt++) {
+		const property = await waitFor(find);
+		if (!property) return null;
+		await new Promise((r) => setTimeout(r, 250));
+		if (property.isConnected) return property;
+	}
+	return null;
+}
+
+/**
+ * Opent Umbraco's keuzevenster voor een nieuw block, vóór of na het block `target.blockKey` (D24).
+ * Umbraco's Block List heeft vóór elk item een "inline create"-knop en aan het eind een "Add"-knop, met een link naar
+ * `…/_catalogue/create/{index}` (index -1 = aan het eind; bron: property-editor-ui-block-list.element.js,
+ * block-list-entries.context.js `getPathForCreateBlock`). Die link volgen we, net als de edit-link bij blocks.
+ * Bij een genest block worden eerst de ouder-blocks geopend. Geeft true als het keuzevenster openging.
+ */
+export async function openBlockCreate(
+	getScope: () => ParentNode | null,
+	target: EditTarget,
+	position: 'before' | 'after',
+): Promise<boolean> {
+	if (!target.propertyAlias || !target.blockKey) return false;
+	const alias = target.propertyAlias;
+	const property = await stableProperty(() => {
+		const scope = getScope();
+		return scope ? deepQuery<HTMLElement>(scope, isProperty(alias)) : null;
+	});
+	if (!property) return false;
+
+	const path: BlockPathStep[] =
+		target.blockPath && target.blockPath.length > 0 ? target.blockPath : [{ propertyAlias: alias, blockKey: target.blockKey }];
+	// De Block List waarin het block staat: die op het document, of in het modal van het ouder-block.
+	let container: HTMLElement = property;
+	for (let i = 0; i < path.length - 1; i++) {
+		const entry = await waitFor(() => deepQuery<HTMLElement>(container, isBlockEntry(path[i].blockKey)));
+		if (!entry) return false;
+		const next = await openBlockAndFind(entry, path[i + 1].propertyAlias);
+		if (!next) return false;
+		container = next;
+	}
+
+	const last = path[path.length - 1].blockKey;
+	const reference = await waitFor(() => deepQuery<HTMLElement>(container, isBlockEntry(last)));
+	if (!reference) return false;
+	const entries = deepQueryAll(container, (el) => el.localName === 'umb-block-list-entry');
+	const index = entries.indexOf(reference) + (position === 'after' ? 1 : 0);
+	const wanted = index >= entries.length ? -1 : index;
+	reference.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior });
+
+	for (let attempt = 0; attempt < 2; attempt++) {
+		const href = await waitFor(() => {
+			const link = deepQueryAll(container, (el) => !!el.getAttribute('href')).find((el) =>
+				el.getAttribute('href')!.replace(/\/$/, '').endsWith(`/_catalogue/create/${wanted}`),
+			);
+			const path = link ? new URL(link.getAttribute('href')!, location.href).pathname : null;
+			return path && path.startsWith(`${location.pathname.replace(/\/$/, '')}/`) ? path : null;
+		}, 3000);
+		if (!href) return false;
+		const before = topModal();
+		await new Promise((r) => requestAnimationFrame(r));
+		navigate(href);
+		if (await waitFor(() => (topModal() !== before ? topModal() : null), 3000)) {
+			markAdd(target, position, wanted);
+			return true;
+		}
+	}
+	return false;
+}
+
+/** Laatste invoeg-verzoek, zichtbaar voor tests. */
+function markAdd(target: EditTarget, position: 'before' | 'after', index: number) {
+	const d = document.documentElement.dataset;
+	d.visualEditingAddBlock = target.blockKey ?? '';
+	d.visualEditingAddPosition = position;
+	d.visualEditingAddIndex = String(index);
 }
 
 /**

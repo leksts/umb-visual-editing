@@ -226,6 +226,51 @@ Elke beslissing: wat, waarom, alternatieven, bron. Bronpaden verwijzen naar de U
   `block-workspace.context.js` (`submit`), `submittable-workspace-context-base.js`, `content-detail-workspace-base.js`
   (`requestSave`), `context-consumer.js` (`skipHost`, `request`, `asPromise`).
 
+## D22 – Visual editing als eerste weergave, alleen bij documenten met een frontend-preview
+- **Probleem**: navigeren in de contentboom opende steeds de weergave Content; Umbraco opent altijd de eerste
+  weergave (laagste positie = hoogste `weight`). Dat geldt voor elke weergave (ook Info).
+- **Wat**: `weight: 250` (vóór Content, 200), plus een eigen condition `VisualEditing.Condition.HasFrontendPreview`. Die
+  vraagt via dezelfde URL-provider als de view of het document een frontend-preview heeft (`VisualEditing:DocumentTypes`
+  in de CMS-config, en het document moet opgeslagen zijn). Zo blijft Content de eerste weergave voor documenttypes
+  zonder frontend.
+- **Alternatief**: de laatst gekozen weergave onthouden en bij openen omleiden. Afgewezen: dat vraagt het onderscheppen
+  van Umbraco's routering (interne werking) en geeft een zichtbare sprong.
+- **Bron**: `core/extension-registry/conditions/switch.condition.js` (UmbConditionBase); spike: document openen via
+  `…/edit/{key}` en via de boom → Visual editing actief.
+
+## D23 – Modi live / preview / edit, gedrag per blocktype, CSP als vangnet
+- **Waarom**: sommige componenten moeten in preview of edit-modus iets anders doen: geen tracking, geen echte acties,
+  geen externe verzoeken bij elke save, verborgen inhoud bereikbaar. Andere platforms (Sanity `useIsPresentationTool`,
+  Builder `isEditing`/`isPreviewing`, Next.js `draftMode`) geven alleen een modus-signaal; de keuze ligt bij het
+  component. Hier wordt die keuze per blocktype expliciet en op één plek vastgelegd.
+- **Wat**:
+  - `web/src/lib/render-mode.ts`: modus (`live` | `preview` | `edit`) uit de server-side preview-context, dus SSR en
+    hydration zien dezelfde waarde. Per blocktype een `BlockPolicy` (`preview` en `edit`: `live` | `readonly` |
+    `static` | `placeholder`). Zonder regel: preview `readonly`, edit `static`.
+  - `BlockList.astro` geeft `mode`/`behavior` door; `placeholder` rendert het component niet.
+  - Voorbeelden: `FaqBlock` (in edit-modus open en zonder `<summary>`, anders kun je het antwoord niet aanklikken) en
+    `ExchangeRateBlock` (externe API: live en preview ophalen, edit-modus een vaste voorbeeldwaarde).
+  - Vangnet: CSP `connect-src` in preview (`'self'` + `VE_PREVIEW_CONNECT_SRC`, standaard de origin van de koers-API) en
+    in edit-modus (alleen `'self'`). Een component dat zich niet aan zijn afspraak houdt, faalt zichtbaar. Live
+    ongewijzigd.
+  - Seed-upgrade (`ApplyUpgradesAsync`): de twee blocktypes en blocks in artikel B worden ook aan een bestaande database
+    toegevoegd, zodat eigen content blijft staan.
+- **Niet gedaan**: analytics uitzetten buiten live (hoort in de layout, er is geen analytics in de PoC); een schakelaar
+  Bewerken/Bekijken in de backoffice.
+
+## D24 – "+" boven en onder een block in de preview: Umbraco's eigen invoegflow
+- **Wat**: het edit-script toont bij een block (ook bij hover op een veld erin) twee "+"-knoppen in de overlay. Een
+  klik stuurt `add` (optioneel bericht, additief binnen protocolversie 1: velden zoals `edit` plus `position`). De
+  backoffice opent de tab, bij een genest block eerst de ouder-blocks, en volgt dan in de Block List de link van
+  Umbraco's eigen invoegknop: vóór elk item een "inline create"-knop met `…/_catalogue/create/{index}`, aan het eind
+  `…/create/-1`. Daarna is het de gewone flow: blocktype kiezen, invullen, Create (of Update & save).
+- **Waarom**: dezelfde keuzes, validatie en blocktypes als in de editor; niets eigens om te onderhouden behalve het
+  vinden van de link (net als de edit-link bij blocks, D16).
+- **Bron**: `block-list/property-editors/block-list-editor/property-editor-ui-block-list.element.js`
+  (`#renderInlineCreateButton`, `#renderCreateButton`), `block-list/context/block-list-entries.context.js`
+  (`getPathForCreateBlock`). Spike: "+" onder het citaat → Tekstblok → Update & save → nieuw block op index 3.
+- **Beperking**: alleen blocks in een Block List; nieuwe documenten (bv. een artikel onder Home) niet.
+
 ## D17 – Herladen na opslaan: `UmbEntityUpdatedEvent` op de action-event-context
 - **Wat**: de view luistert via `UMB_ACTION_EVENT_CONTEXT` naar `UmbEntityUpdatedEvent.TYPE` voor de eigen `unique`.
   Daarna volgen `getScroll`, een nieuwe preview-URL (vers token) met cache-buster, `init` met de scrollpositie en dan `ready`.

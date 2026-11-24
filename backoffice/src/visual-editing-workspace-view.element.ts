@@ -14,9 +14,9 @@ import { tryExecute } from '@umbraco-cms/backoffice/resources';
 import { umbExtensionsRegistry } from '@umbraco-cms/backoffice/extension-registry';
 import { createExtensionElement } from '@umbraco-cms/backoffice/extension-api';
 import type { UmbWorkspaceViewElement } from '@umbraco-cms/backoffice/workspace';
-import type { EditRequestMessage } from '../../shared/protocol';
+import type { AddRequestMessage, EditRequestMessage } from '../../shared/protocol';
 import { PreviewBridge } from './preview-bridge';
-import { editorReady, focusTarget, navigate, tabSegmentFor, type EditTarget } from './navigation';
+import { editorReady, focusTarget, navigate, openBlockCreate, tabSegmentFor, type EditTarget } from './navigation';
 import { VISUAL_EDITING_VIEW_PATHNAME } from './index';
 
 const URL_PROVIDER_ALIAS = 'VisualEditing';
@@ -52,6 +52,7 @@ export class VisualEditingWorkspaceViewElement extends UmbLitElement implements 
 	#bridge = new PreviewBridge({
 		onReady: (documentKeys) => this.#onReady(documentKeys),
 		onEdit: (message) => this.#onEdit(message),
+		onAdd: (message) => this.#onAdd(message),
 	});
 
 	constructor() {
@@ -196,10 +197,33 @@ export class VisualEditingWorkspaceViewElement extends UmbLitElement implements 
 
 	/** Eigen document: juiste tab in de editor naast de preview (sluit ook een open modal), dan veld focussen. */
 	async #focusOwn(target: EditTarget, opts: { replace?: boolean } = {}) {
-		const base = location.pathname.split(`/view/${VISUAL_EDITING_VIEW_PATHNAME}`)[0] + `/view/${VISUAL_EDITING_VIEW_PATHNAME}`;
-		const segment = this.#workspace && target.propertyAlias ? await tabSegmentFor(this.#workspace, target.propertyAlias) : null;
-		navigate(segment ? `${base}/${segment}` : base, opts);
+		await this.#openTab(target.propertyAlias, opts);
 		await focusTarget(() => this.renderRoot.querySelector('#editor'), target);
+	}
+
+	/** Tab van een property in de editor naast de preview (sluit ook een open modal). */
+	async #openTab(propertyAlias: string | null, opts: { replace?: boolean } = {}) {
+		const base = location.pathname.split(`/view/${VISUAL_EDITING_VIEW_PATHNAME}`)[0] + `/view/${VISUAL_EDITING_VIEW_PATHNAME}`;
+		const segment = this.#workspace && propertyAlias ? await tabSegmentFor(this.#workspace, propertyAlias) : null;
+		navigate(segment ? `${base}/${segment}` : base, opts);
+	}
+
+	/**
+	 * "+" boven of onder een block in de preview: Umbraco's eigen keuzevenster voor een nieuw block openen, op die plek
+	 * in de Block List (D24). Bij een genest block eerst de ouder-blocks openen.
+	 */
+	async #onAdd(message: AddRequestMessage) {
+		if (message.documentKey !== this.#unique) return;
+		const target: EditTarget = {
+			documentKey: message.documentKey,
+			culture: message.culture,
+			propertyAlias: message.propertyAlias,
+			blockKey: message.blockKey,
+			blockPropertyAlias: null,
+			blockPath: message.blockPath ?? null,
+		};
+		await this.#openTab(target.propertyAlias);
+		await openBlockCreate(() => this.renderRoot.querySelector('#editor'), target, message.position);
 	}
 
 	override render() {

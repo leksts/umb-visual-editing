@@ -57,6 +57,15 @@ blocks wordt niet bijgewerkt (de CMS logt dan een waarschuwing): verwijder hem e
    terug.
 4. Wijzig iets en klik **Save**: de preview herlaadt op dezelfde scrollpositie. In een block (ook genest) kan dat in
    één klik met **Update & save**: alle open blocks worden bijgewerkt en het document wordt opgeslagen.
+5. Een block toevoegen: beweeg over een block en klik op **+** erboven of eronder. Umbraco's keuzevenster opent op die
+   plek (ook in een genest block).
+
+Visual editing is de eerste weergave van documenten met een frontend-preview en opent dus ook bij klikken in de
+contentboom.
+
+Componenten kunnen zich per modus anders gedragen: **live** (site), **preview** (concept zonder gevolgen) en **edit**
+(preview in de backoffice). Zie `web/src/lib/render-mode.ts` en DECISIONS D23. Voorbeeld in artikel B: het uitklapblok
+staat in edit-modus open, het wisselkoersblock haalt in edit-modus geen live koers op.
 
 Ook nooit-gepubliceerde documenten hebben een preview (Umbraco geeft ze de route `/preview-{key}/`).
 
@@ -91,7 +100,8 @@ CMS (`appsettings.Development.json`):
 Frontend (environment-variabelen; de defaults passen bij de CMS-config hierboven):
 `UMBRACO_URL`, `UMBRACO_API_KEY`, `PREVIEW_SECRET`, `VE_ALLOWED_PARENT_ORIGINS` (postMessage-allowlist),
 `VE_FRAME_ANCESTORS` (CSP, standaard gelijk aan de allowlist), `VE_METADATA_SOURCE` (`api`|`mock`),
-`VE_TEST_HARNESS=1` (nep-parent beschikbaar maken).
+`VE_TEST_HARNESS=1` (nep-parent beschikbaar maken), `RATES_API_URL` (externe API van het wisselkoersblock),
+`VE_PREVIEW_CONNECT_SRC` (CSP `connect-src` in preview, naast `'self'`).
 
 ## Hoe het werkt (kort)
 

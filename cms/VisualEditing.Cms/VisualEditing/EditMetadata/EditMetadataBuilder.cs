@@ -9,7 +9,8 @@ namespace VisualEditing.Cms.VisualEditing.EditMetadata;
 /// <summary>
 /// Berekent de edit-metadata van een document uit het (preview-)<see cref="IPublishedContent"/>.
 /// Labels en tabs komen uit het documenttype (<see cref="IContentTypeService"/>, gecachet door Umbraco).
-/// Blocks: alleen Block List op het eerste niveau (geneste blocks en Block Grid-layouts zijn buiten scope).
+/// Blocks: Block List, ook genest (een Block List-property van een block). Alle blocks staan plat in één dictionary;
+/// <c>parentBlockKey</c> en <c>path</c> geven de plek in de boom. Block Grid-layouts zijn buiten scope.
 /// </summary>
 public sealed class EditMetadataBuilder
 {
@@ -33,24 +34,7 @@ public sealed class EditMetadataBuilder
         foreach (IPublishedProperty property in content.Properties)
         {
             properties[property.Alias] = Describe(contentType, property.PropertyType);
-
-            if (property.GetValue(culture) is BlockListModel blockList)
-            {
-                var index = 0;
-                foreach (BlockListItem item in blockList)
-                {
-                    IContentType? elementType = _contentTypeService.Get(item.Content.ContentType.Key);
-                    blocks[item.ContentKey.ToString()] = new EditBlockMetadata(
-                        BlockKey: item.ContentKey,
-                        SettingsKey: item.Settings is null ? null : item.SettingsKey,
-                        ElementType: item.Content.ContentType.Alias,
-                        PropertyAlias: property.Alias,
-                        Path: $"{property.Alias}[{index}]",
-                        Index: index,
-                        Properties: item.Content.Properties.ToDictionary(p => p.Alias, p => Describe(elementType, p.PropertyType)));
-                    index++;
-                }
-            }
+            AddBlocks(property, culture, parent: null, pathPrefix: string.Empty, blocks);
         }
 
         return new EditMetadataModel(
@@ -61,6 +45,38 @@ public sealed class EditMetadataBuilder
             Culture: culture,
             Properties: properties,
             Blocks: blocks);
+    }
+
+    /// <summary>Voegt de blocks van een Block List-property toe, en daarna (diepte eerst) hun geneste blocks.</summary>
+    private void AddBlocks(IPublishedProperty property, string? culture, Guid? parent, string pathPrefix, Dictionary<string, EditBlockMetadata> blocks)
+    {
+        if (property.GetValue(culture) is not BlockListModel blockList)
+        {
+            return;
+        }
+
+        var index = 0;
+        foreach (BlockListItem item in blockList)
+        {
+            IContentType? elementType = _contentTypeService.Get(item.Content.ContentType.Key);
+            var path = $"{pathPrefix}{property.Alias}[{index}]";
+            blocks[item.ContentKey.ToString()] = new EditBlockMetadata(
+                BlockKey: item.ContentKey,
+                SettingsKey: item.Settings is null ? null : item.SettingsKey,
+                ElementType: item.Content.ContentType.Alias,
+                PropertyAlias: property.Alias,
+                ParentBlockKey: parent,
+                Path: path,
+                Index: index,
+                Properties: item.Content.Properties.ToDictionary(p => p.Alias, p => Describe(elementType, p.PropertyType)));
+
+            foreach (IPublishedProperty nested in item.Content.Properties)
+            {
+                AddBlocks(nested, culture, item.ContentKey, $"{path}.", blocks);
+            }
+
+            index++;
+        }
     }
 
     private static EditPropertyMetadata Describe(IContentTypeComposition? type, IPublishedPropertyType propertyType)

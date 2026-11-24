@@ -162,7 +162,7 @@ Alle berichten: `{ source: "umbraco-visual-editing", version: 1, type: "...", ..
 | 1 | frontend → parent | `loaded` | `{ url }` | Het enige bericht vóór de handshake. Wordt verstuurd met `targetOrigin` = elke geconfigureerde toegestane parent-origin (nooit `*`). Alleen de origin die echt de parent is, ontvangt het. |
 | 2 | parent → frontend | `init` | `{ editMode: boolean, scroll?: { x, y } }` | Frontend accepteert alleen als `event.source === window.parent` en `event.origin` in de allowlist staat. Daarna onthoudt hij die origin. Alle volgende berichten gaan alleen naar die origin, en alleen berichten van die origin worden geaccepteerd. Een tweede `init` van een andere origin wordt genegeerd. |
 | 3 | frontend → parent | `ready` | `{ url, editMode, documentKeys? }` | Bevestiging van de handshake (na herstel van de scrollpositie). `documentKeys` (later toegevoegd, additief): documenten met bewerkbare elementen op de pagina; opslaan van één ervan herlaadt de preview. |
-| 4 | frontend → parent | `edit` | `{ documentKey, culture, propertyAlias, blockKey?, blockPropertyAlias?, entityType: "document" }` | Bij een klik op een bewerkbaar element in edit-modus. |
+| 4 | frontend → parent | `edit` | `{ documentKey, culture, propertyAlias, blockKey?, blockPropertyAlias?, blockPath?, entityType: "document" }` | Bij een klik op een bewerkbaar element in edit-modus. `blockPath` (later toegevoegd, additief): alleen bij geneste blocks, `[{ propertyAlias, blockKey }, …]` van buiten naar binnen; `propertyAlias` is dan de Block List-property op het document en `blockKey` het binnenste block. |
 | 5 | parent → frontend | `getScroll` | `{ requestId }` | Vlak vóór herladen. |
 | 6 | frontend → parent | `scroll` | `{ requestId, x, y }` | Antwoord op 5. |
 
@@ -200,17 +200,29 @@ ongewijzigd blijven:
         "settingsKey": null,
         "elementType": "quoteBlock",
         "propertyAlias": "blocks",
+        "parentBlockKey": null,
         "path": "blocks[1]",
         "index": 1,
         "properties": {
           "quote":  { "alias": "quote",  "label": "Citaat", "editorAlias": "Umbraco.TextArea" },
           "author": { "alias": "author", "label": "Auteur", "editorAlias": "Umbraco.TextBox" }
         }
+      },
+      "<genest block>": {
+        "elementType": "quoteBlock",
+        "propertyAlias": "items",
+        "parentBlockKey": "<key van het Uitgelicht-block>",
+        "path": "blocks[5].items[1]",
+        …
       }
     }
   }
 }
 ```
+
+Alle blocks staan plat in `blocks`, ook geneste (een Block List-property van een block). `propertyAlias` is de Block
+List-property waarin het block staat (op het document of op het ouder-block), `parentBlockKey` wijst naar het
+ouder-block. Een geneste block volgt in de volgorde direct op zijn ouder.
 
 In de frontend wordt dit omgezet naar een **edit-descriptor** per component en naar data-attributen:
 
@@ -221,6 +233,7 @@ In de frontend wordt dit omgezet naar een **edit-descriptor** per component en n
 | `data-umb-prop` | property-alias op het document (bij blocks: de Block List-property) |
 | `data-umb-block` | content-key van het block (alleen bij blocks) |
 | `data-umb-block-prop` | property-alias binnen het block |
+| `data-umb-block-path` | alleen bij geneste blocks: `property/block-key/property/block-key/…`, van buiten naar binnen |
 | `data-umb-label` | label voor de overlay |
 
 ## 4. Architectuur en repository-indeling

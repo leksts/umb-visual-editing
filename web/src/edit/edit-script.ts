@@ -13,6 +13,7 @@ import {
 	createMessage,
 	isProtocolMessage,
 	normalizeOrigin,
+	parseBlockPath,
 	type EditRequestMessage,
 	type FrontendToParentMessage,
 	type ProtocolMessage,
@@ -178,6 +179,7 @@ export function startVisualEditing(): void {
 		if (target?.closest(PASSTHROUGH_SELECTOR)) return;
 		event.preventDefault();
 		event.stopPropagation();
+		const blockPath = parseBlockPath(el.getAttribute(A.blockPath));
 		send(
 			createMessage<EditRequestMessage>('edit', {
 				entityType: 'document',
@@ -186,6 +188,7 @@ export function startVisualEditing(): void {
 				propertyAlias: el.getAttribute(A.property),
 				blockKey: el.getAttribute(A.block),
 				blockPropertyAlias: el.getAttribute(A.blockProperty),
+				...(blockPath ? { blockPath } : {}),
 			}),
 		);
 		overlay.flash();

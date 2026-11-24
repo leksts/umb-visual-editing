@@ -115,15 +115,19 @@ test.describe('fase 3: preview + edit-vlag', () => {
 		const meta = body.editMetadata;
 		const apiBlockIds: string[] = body.properties.blocks.items.map((i: any) => i.content.id);
 
-		// Elke block in de output is via zijn bestaande content.id terug te vinden in de metadata.
-		expect(Object.keys(meta.blocks)).toEqual(apiBlockIds);
-		expect(apiBlockIds).toHaveLength(5);
+		// Elke block in de output is via zijn bestaande content.id terug te vinden in de metadata; geneste blocks
+		// (de items van Uitgelicht) volgen direct na hun ouder.
+		const nestedIds: string[] = body.properties.blocks.items[5].content.properties.items.items.map((i: any) => i.content.id);
+		expect(Object.keys(meta.blocks)).toEqual([...apiBlockIds, ...nestedIds]);
+		expect(apiBlockIds).toHaveLength(6);
+		expect(nestedIds).toEqual([KEYS.nestedBlock(1, 5, 0), KEYS.nestedBlock(1, 5, 1)]);
 
 		expect(meta.blocks[KEYS.block(1, 2)]).toEqual({
 			blockKey: KEYS.block(1, 2),
 			settingsKey: null,
 			elementType: 'quoteBlock',
 			propertyAlias: 'blocks',
+			parentBlockKey: null,
 			path: 'blocks[2]',
 			index: 2,
 			properties: {
@@ -139,6 +143,32 @@ test.describe('fase 3: preview + edit-vlag', () => {
 			index: 0,
 		});
 		expect(Object.keys(meta.blocks[KEYS.block(1, 0)].properties)).toEqual(['heading', 'text']);
+	});
+
+	test('metadata van artikel A: geneste blocks met ouder-block en pad', async () => {
+		const meta = JSON.parse((await current('preview-edit-by-id')).body).editMetadata;
+		expect(meta.blocks[KEYS.block(1, 5)]).toMatchObject({
+			elementType: 'calloutBlock',
+			propertyAlias: 'blocks',
+			parentBlockKey: null,
+			path: 'blocks[5]',
+		});
+		expect(meta.blocks[KEYS.block(1, 5)].properties.items).toEqual({
+			alias: 'items', label: 'Items', editorAlias: 'Umbraco.BlockList', tab: 'Inhoud',
+		});
+		expect(meta.blocks[KEYS.nestedBlock(1, 5, 1)]).toEqual({
+			blockKey: KEYS.nestedBlock(1, 5, 1),
+			settingsKey: null,
+			elementType: 'quoteBlock',
+			propertyAlias: 'items',
+			parentBlockKey: KEYS.block(1, 5),
+			path: 'blocks[5].items[1]',
+			index: 1,
+			properties: {
+				quote: { alias: 'quote', label: 'Citaat', editorAlias: 'Umbraco.TextArea', tab: 'Inhoud' },
+				author: { alias: 'author', label: 'Auteur', editorAlias: 'Umbraco.TextBox', tab: 'Inhoud' },
+			},
+		});
 	});
 
 	test('query-endpoint: elk item heeft zijn eigen metadata', async () => {

@@ -155,10 +155,32 @@ Elke beslissing: wat, waarom, alternatieven, bron. Bronpaden verwijzen naar de U
   tabs van dat modal geprobeerd. De frontend meldt in `ready` welke documenten op de pagina staan (`documentKeys`,
   additief binnen protocolversie 1). Opslaan van één daarvan herlaadt de preview.
 - **Waarom**: de eerste versie navigeerde de backoffice naar het andere document, waardoor de preview naar die pagina
-  sprong. Dat voelde als "de link volgen", en de redacteur verloor de pagina waar hij mee bezig was. Het iframe zelf
+  sprong. Dat voelde als "de link volgen", en de redacteur verloor de pagina waarmee die bezig was. Het iframe zelf
   volgde de link niet (de klik wordt tegengehouden); dat is nu ook expliciet getest.
 - **Alternatieven**: navigeren naar het andere document (eerste versie); het andere document in het rechterpaneel laden
   (vereist een tweede workspace-context; complex).
+
+## D19 – Geneste blocks: platte metadata met ouder-verwijzing, pad in het edit-bericht
+- **Wat**:
+  - API: `EditMetadataBuilder` loopt Block List-properties van blocks recursief af. Alle blocks blijven in één platte
+    dictionary `blocks` (opzoeken op de bestaande `content.id` blijft één stap). Nieuw veld `parentBlockKey`;
+    `propertyAlias` is de Block List-property waarin het block staat; `path` wordt bv. `blocks[5].items[1]`.
+  - Frontend: `blockEdit` bouwt het pad via `parentBlockKey` en rendert het als `data-umb-block-path` (alleen bij een
+    genest block). `BlockList.astro` rendert geneste blocks recursief (`Astro.self`) in de slot van het Vue-component
+    `CalloutBlock` ("Uitgelicht").
+  - Protocol: `edit` krijgt optioneel `blockPath` (additief binnen versie 1). Blocks op het eerste niveau sturen
+    precies hetzelfde bericht als voorheen.
+  - Backoffice: `focusTarget` opent de blocks van het pad één voor één via hun eigen edit-link. In elk nieuw modal wordt
+    de volgende Block List-property gezocht, en in het laatste modal het veld. Er wordt alleen gezocht in een modal dat
+    *na* de klik is geopend, niet in het ouder-modal eronder.
+  - Seed: element type `calloutBlock` ("Uitgelicht": titel + Block List `items` met tekstblokken en citaten), als
+    zesde block in artikel A, met een tekstblok en een citaat erin.
+- **Waarom**: vraag van de opdrachtgever ("ook als die dieper zit"). Een platte lijst met ouder-verwijzing houdt de
+  frontend-koppeling eenvoudig en maakt elk niveau diep mogelijk zonder het formaat te wijzigen.
+- **Alternatieven**: geneste `blocks` per block in de metadata (zoeken wordt recursief); het pad laten afleiden door de
+  backoffice (die heeft de metadata niet).
+- **Bron**: spike in de draaiende backoffice 18.3.2: de edit-link van een genest item valt onder de route van het
+  ouder-modal (`…/block/edit/{ouder}/…/block/edit/{kind}/…`), dus dezelfde wachtregel als bij D16 werkt.
 
 ## D17 – Herladen na opslaan: `UmbEntityUpdatedEvent` op de action-event-context
 - **Wat**: de view luistert via `UMB_ACTION_EVENT_CONTEXT` naar `UmbEntityUpdatedEvent.TYPE` voor de eigen `unique`.

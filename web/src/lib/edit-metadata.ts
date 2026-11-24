@@ -14,6 +14,8 @@ export interface EditBlockMetadata {
 	settingsKey: string | null;
 	elementType: string;
 	propertyAlias: string;
+	/** Ouder-block bij een genest block, anders null. */
+	parentBlockKey: string | null;
 	path: string;
 	index: number;
 	properties: Record<string, EditPropertyMetadata>;
@@ -50,19 +52,26 @@ export function blockEdit(item: ApiContent | null | undefined, block: ApiBlockIt
 	const meta = item?.editMetadata;
 	const blockMeta = meta?.blocks[block.content.id];
 	if (!meta || !blockMeta) return undefined;
-	const parent = meta.properties[blockMeta.propertyAlias];
+	// Pad van buiten naar binnen via parentBlockKey; de eerste stap is de Block List-property op het document.
+	const chain: EditBlockMetadata[] = [];
+	for (let b: EditBlockMetadata | undefined = blockMeta; b; b = b.parentBlockKey ? meta.blocks[b.parentBlockKey] : undefined) {
+		chain.unshift(b);
+	}
+	const root = chain[0];
+	const parent = meta.properties[root.propertyAlias];
 	return {
 		documentKey: meta.documentKey,
 		culture: meta.culture,
-		propertyAlias: blockMeta.propertyAlias,
+		propertyAlias: root.propertyAlias,
 		blockKey: blockMeta.blockKey,
-		label: `${parent?.label ?? blockMeta.propertyAlias} › ${humanize(blockMeta.elementType)} ${blockMeta.index + 1}`,
+		blockPath: chain.map((b) => ({ propertyAlias: b.propertyAlias, blockKey: b.blockKey })),
+		label: [parent?.label ?? root.propertyAlias, ...chain.map((b) => `${humanize(b.elementType)} ${b.index + 1}`)].join(' › '),
 		labels: labels(blockMeta.properties),
 	};
 }
 
 function humanize(alias: string): string {
-	const known: Record<string, string> = { textBlock: 'Tekstblok', quoteBlock: 'Citaat' };
+	const known: Record<string, string> = { textBlock: 'Tekstblok', quoteBlock: 'Citaat', calloutBlock: 'Uitgelicht' };
 	return known[alias] ?? alias;
 }
 
@@ -80,21 +89,27 @@ export function withMockEditMetadata(item: ApiContent | null): ApiContent | null
 	});
 	const properties = Object.fromEntries(Object.keys(item.properties).map((a) => [a, prop(a)]));
 	const blocks: Record<string, EditBlockMetadata> = {};
-	for (const [alias, value] of Object.entries(item.properties)) {
-		const items = (value as { items?: ApiBlockItem[] } | null)?.items;
-		if (!Array.isArray(items)) continue;
-		items.forEach((b, index) => {
-			blocks[b.content.id] = {
-				blockKey: b.content.id,
-				settingsKey: b.settings?.id ?? null,
-				elementType: b.content.contentType,
-				propertyAlias: alias,
-				path: `${alias}[${index}]`,
-				index,
-				properties: Object.fromEntries(Object.keys(b.content.properties).map((a) => [a, prop(a)])),
-			};
-		});
-	}
+	const addBlocks = (props: Record<string, unknown>, parent: string | null, prefix: string) => {
+		for (const [alias, value] of Object.entries(props)) {
+			const items = (value as { items?: ApiBlockItem[] } | null)?.items;
+			if (!Array.isArray(items)) continue;
+			items.forEach((b, index) => {
+				const path = `${prefix}${alias}[${index}]`;
+				blocks[b.content.id] = {
+					blockKey: b.content.id,
+					settingsKey: b.settings?.id ?? null,
+					elementType: b.content.contentType,
+					propertyAlias: alias,
+					parentBlockKey: parent,
+					path,
+					index,
+					properties: Object.fromEntries(Object.keys(b.content.properties).map((a) => [a, prop(a)])),
+				};
+				addBlocks(b.content.properties, b.content.id, `${path}.`);
+			});
+		}
+	};
+	addBlocks(item.properties, null, '');
 	return {
 		...item,
 		editMetadata: {

@@ -1,10 +1,11 @@
 ---
 /**
- * Kiest per blocktype het Vue-component. Dit is "routing" van blocks en staat daarom in Astro:
+ * Kiest per blocktype het Vue-component (ook voor geneste blocks, via Astro.self). Dit is "routing" van blocks en staat daarom in Astro:
  * alleen hier kan een client-directive worden gezet (QuoteBlock is interactief en wordt gehydrateerd).
  */
 import TextBlock from './TextBlock.vue';
 import QuoteBlock from './QuoteBlock.vue';
+import CalloutBlock from './CalloutBlock.vue';
 import { blockEdit } from '../lib/edit-metadata';
 import type { ApiBlockItem, ApiContent } from '../lib/umbraco';
 
@@ -24,6 +25,15 @@ const { item, blocks } = Astro.props;
 				return <TextBlock heading={p.heading} text={p.text} edit={edit} />;
 			case 'quoteBlock':
 				return <QuoteBlock client:load quote={p.quote} author={p.author} edit={edit} />;
+			case 'calloutBlock': {
+				// Genest: de blocks van "items" worden recursief met dit component gerenderd.
+				const nested = (block.content.properties.items as { items?: ApiBlockItem[] } | null)?.items ?? [];
+				return (
+					<CalloutBlock title={p.title} edit={edit}>
+						<Astro.self item={item} blocks={nested} />
+					</CalloutBlock>
+				);
+			}
 			default:
 				return null;
 		}

@@ -41,8 +41,10 @@ Dit bouwt de backoffice-extensie en start de CMS en Astro samen:
 - Frontend: http://localhost:4321
 
 De eerste start maakt de SQLite-database aan, installeert Umbraco en seedt de content (documenttypes Home en Artikel,
-Block List met Tekstblok en Citaat, drie artikelen). Opnieuw beginnen: stop alles en verwijder
-`cms/VisualEditing.Cms/umbraco/Data/Umbraco.sqlite.db*`. De seed gebruikt vaste keys.
+Block List met Tekstblok, Citaat en Uitgelicht, drie artikelen). Uitgelicht heeft zelf weer een Block List: zo bevat
+artikel A geneste blocks. Opnieuw beginnen: stop alles en verwijder
+`cms/VisualEditing.Cms/umbraco/Data/Umbraco.sqlite.db*`. De seed gebruikt vaste keys. Een database van vóór de geneste
+blocks wordt niet bijgewerkt (de CMS logt dan een waarschuwing): verwijder hem en start opnieuw.
 
 ### Gebruik
 
@@ -50,7 +52,7 @@ Block List met Tekstblok en Citaat, drie artikelen). Opnieuw beginnen: stop alle
 2. Links staat de preview (concept-content), rechts de gewone editor.
 3. Beweeg over de preview: bewerkbare elementen krijgen een kader met label. Klik op een element: rechts opent de juiste
    tab en het veld krijgt focus. Bij een veld in een block (bijvoorbeeld de auteur van een citaat) opent het block en
-   krijgt dát veld focus. Een element van een ander document (zoals een artikelkaart op de homepage, ook als het een
+   krijgt dát veld focus, ook in een block binnen een block (het citaat in "Uitgelicht"). Een element van een ander document (zoals een artikelkaart op de homepage, ook als het een
    link is) opent dat document in een modal; de preview blijft staan en ververst na opslaan.
 4. Wijzig iets en klik **Save**: de preview herlaadt op dezelfde scrollpositie.
 
@@ -91,7 +93,7 @@ Frontend (environment-variabelen; de defaults passen bij de CMS-config hierboven
 
 1. **Delivery API** – bij `Preview: true` + geldige `Api-Key` + `Visual-Editing: true` krijgt elk content-item een
    `editMetadata`-object naast de bestaande velden (document-key, documenttype, culture, per property alias/label/tab, per
-   block key/ouder-property/pad). Alle andere responses zijn bytegelijk aan standaard-Umbraco.
+   block key/ouder-property/ouder-block/pad, ook voor geneste blocks). Alle andere responses zijn bytegelijk aan standaard-Umbraco.
 2. **Vue-componenten** – optionele prop `edit` + `useEdit()`; `v-bind="e.field('title')"` zet de `data-umb-*`-attributen.
 3. **Edit-script** – alleen geladen met een geldig preview-token en `ve=1`; handshake `loaded` → `init` → `ready`,
    overlays, klik → `edit`, `getScroll`/`scroll`. Nooit `*` als target origin.

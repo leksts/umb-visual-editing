@@ -15,11 +15,15 @@ public sealed record EditMetadataModel(
 
 public sealed record EditPropertyMetadata(string Alias, string Label, string EditorAlias, string? Tab);
 
+/// <param name="PropertyAlias">Block List-property waarin het block staat: op het document, of (genest) op het ouder-block.</param>
+/// <param name="ParentBlockKey">Ouder-block bij een genest block; <c>null</c> op het eerste niveau.</param>
+/// <param name="Path">Plek in de boom, bv. <c>blocks[5].items[1]</c>.</param>
 public sealed record EditBlockMetadata(
     Guid BlockKey,
     Guid? SettingsKey,
     string ElementType,
     string PropertyAlias,
+    Guid? ParentBlockKey,
     string Path,
     int Index,
     IReadOnlyDictionary<string, EditPropertyMetadata> Properties);

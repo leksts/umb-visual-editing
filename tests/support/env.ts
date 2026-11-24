@@ -13,6 +13,8 @@ export const KEYS = {
 	articleB: '5e0d0000-0000-4000-8000-000000000212',
 	articleC: '5e0d0000-0000-4000-8000-000000000213',
 	block: (article: number, index: number) => `5e0d0000-0000-4000-8000-0000000003${article}${index}`,
+	/** Block in een block (de "items" van een Uitgelicht-block). */
+	nestedBlock: (article: number, parent: number, index: number) => `5e0d0000-0000-4000-8000-000000004${article}${parent}${index}`,
 };
 
 /** Zelfde tokenformaat als de CMS (VisualEditingUrlProvider) en web/src/lib/preview.ts. */

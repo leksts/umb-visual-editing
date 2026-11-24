@@ -1,4 +1,4 @@
-import { EDIT_ATTRIBUTES as A } from '../../../shared/protocol';
+import { EDIT_ATTRIBUTES as A, formatBlockPath, type BlockPathStep } from '../../../shared/protocol';
 
 /**
  * Edit-descriptor die een content-component als optionele prop `edit` ontvangt (DECISIONS.md D7).
@@ -11,6 +11,8 @@ export interface EditDescriptor {
 	propertyAlias?: string;
 	/** Alleen bij blocks: content-key van het block. */
 	blockKey?: string;
+	/** Alleen bij geneste blocks: pad van buiten naar binnen (eerste stap = property op het document). */
+	blockPath?: BlockPathStep[];
 	/** Label voor de overlay (document- of blocknaam). */
 	label?: string;
 	/** Labels per property-alias (uit de metadata). */
@@ -27,6 +29,11 @@ function base(edit: EditDescriptor): EditAttrs {
 	return attrs;
 }
 
+/** Alleen bij een genest block (pad langer dan één stap); blocks op het eerste niveau houden hun attributen. */
+function blockPath(edit: EditDescriptor): EditAttrs {
+	return edit.blockPath && edit.blockPath.length > 1 ? { [A.blockPath]: formatBlockPath(edit.blockPath) } : {};
+}
+
 /** Attributen voor het root-element van een component: bij een block het hele block, anders niets. */
 export function rootAttrs(edit: EditDescriptor | undefined | null): EditAttrs {
 	if (!edit?.blockKey) return NONE;
@@ -34,6 +41,7 @@ export function rootAttrs(edit: EditDescriptor | undefined | null): EditAttrs {
 		...base(edit),
 		[A.property]: edit.propertyAlias ?? '',
 		[A.block]: edit.blockKey,
+		...blockPath(edit),
 		[A.label]: edit.label ?? 'Block',
 	};
 }
@@ -48,6 +56,7 @@ export function fieldAttrs(edit: EditDescriptor | undefined | null, alias: strin
 			[A.property]: edit.propertyAlias ?? '',
 			[A.block]: edit.blockKey,
 			[A.blockProperty]: alias,
+			...blockPath(edit),
 			[A.label]: `${edit.label ?? 'Block'} › ${fieldLabel}`,
 		};
 	}

@@ -10,8 +10,10 @@ public static class SeedKeys
     public static readonly Guid ArticleType = Guid.Parse("5e0d0000-0000-4000-8000-000000000002");
     public static readonly Guid TextBlockType = Guid.Parse("5e0d0000-0000-4000-8000-000000000003");
     public static readonly Guid QuoteBlockType = Guid.Parse("5e0d0000-0000-4000-8000-000000000004");
+    public static readonly Guid CalloutBlockType = Guid.Parse("5e0d0000-0000-4000-8000-000000000005");
 
     public static readonly Guid BlockListDataType = Guid.Parse("5e0d0000-0000-4000-8000-000000000010");
+    public static readonly Guid NestedBlockListDataType = Guid.Parse("5e0d0000-0000-4000-8000-000000000011");
 
     public static readonly Guid Home = Guid.Parse("5e0d0000-0000-4000-8000-000000000201");
     public static readonly Guid ArticleA = Guid.Parse("5e0d0000-0000-4000-8000-000000000211");
@@ -21,4 +23,7 @@ public static class SeedKeys
     public static Guid Media(int n) => Guid.Parse($"5e0d0000-0000-4000-8000-00000000010{n}");
 
     public static Guid Block(int article, int index) => Guid.Parse($"5e0d0000-0000-4000-8000-0000000003{article}{index}");
+
+    /// <summary>Block binnen een block (de Block List "items" van een Uitgelicht-block).</summary>
+    public static Guid NestedBlock(int article, int parentIndex, int index) => Guid.Parse($"5e0d0000-0000-4000-8000-000000004{article}{parentIndex}{index}");
 }

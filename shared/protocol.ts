@@ -36,14 +36,27 @@ export interface ReadyMessage extends Envelope<'ready'> {
 	documentKeys?: string[];
 }
 
+/** Eén stap in het pad naar een genest block: de Block List-property en het block daarin. */
+export interface BlockPathStep {
+	propertyAlias: string;
+	blockKey: string;
+}
+
 /** frontend → parent. Redacteur klikte op een bewerkbaar element. */
 export interface EditRequestMessage extends Envelope<'edit'> {
 	entityType: 'document';
 	documentKey: string;
 	culture: string | null;
+	/** Property op het document (bij een block: de Block List-property op het document). */
 	propertyAlias: string | null;
+	/** Het (binnenste) block. */
 	blockKey: string | null;
 	blockPropertyAlias: string | null;
+	/**
+	 * Optioneel (additief binnen versie 1), alleen bij geneste blocks: het pad van buiten naar binnen, beginnend bij
+	 * de property op het document en eindigend bij `blockKey`.
+	 */
+	blockPath?: BlockPathStep[];
 }
 
 /** parent → frontend. Vraag de huidige scrollpositie op (vlak voor herladen). */
@@ -77,6 +90,20 @@ export function isProtocolMessage(data: unknown): data is ProtocolMessage {
 	);
 }
 
+/** "blocks/k1/items/k2" ↔ [{ propertyAlias: 'blocks', blockKey: 'k1' }, …]. */
+export function formatBlockPath(path: BlockPathStep[]): string {
+	return path.flatMap((s) => [s.propertyAlias, s.blockKey]).join('/');
+}
+
+export function parseBlockPath(value: string | null): BlockPathStep[] | undefined {
+	if (!value) return undefined;
+	const parts = value.split('/');
+	if (parts.length < 2 || parts.length % 2 !== 0 || parts.some((p) => !p)) return undefined;
+	const steps: BlockPathStep[] = [];
+	for (let i = 0; i < parts.length; i += 2) steps.push({ propertyAlias: parts[i], blockKey: parts[i + 1] });
+	return steps;
+}
+
 /** Normaliseert een origin (zonder trailing slash, lowercase), zodat vergelijken betrouwbaar is. */
 export function normalizeOrigin(origin: string): string {
 	try {
@@ -93,5 +120,7 @@ export const EDIT_ATTRIBUTES = {
 	property: 'data-umb-prop',
 	block: 'data-umb-block',
 	blockProperty: 'data-umb-block-prop',
+	/** Alleen bij geneste blocks: "property/block-key/property/block-key/…", van buiten naar binnen. */
+	blockPath: 'data-umb-block-path',
 	label: 'data-umb-label',
 } as const;

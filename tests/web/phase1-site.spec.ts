@@ -5,7 +5,7 @@ test.describe('fase 1: site en preview', () => {
 	test('gepubliceerde artikelpagina toont de titel', async ({ page }) => {
 		await page.goto('/waarom-headless/');
 		await expect(page.locator('h1')).toHaveText('Waarom headless?');
-		await expect(page.locator('.quote-block blockquote')).toHaveText('Wie de componenten beheert, beheert ook de edit-metadata.');
+		await expect(page.locator('.quote-block blockquote').first()).toHaveText('Wie de componenten beheert, beheert ook de edit-metadata.');
 	});
 
 	test('gepubliceerde pagina toont niet de concepttitel', async ({ page }) => {
@@ -28,10 +28,11 @@ test.describe('fase 1: site en preview', () => {
 		await page.goto('/');
 		await expect(page.locator('.card')).toHaveCount(3);
 		await page.goto('/waarom-headless/');
-		// Precies één Astro-eiland (QuoteBlock); de rest is statische HTML.
-		await expect(page.locator('astro-island')).toHaveCount(1);
-		await expect(page.locator('astro-island .quote-block')).toHaveCount(1);
-		const copy = page.getByRole('button', { name: 'Kopieer citaat' });
+		// Alleen de citaatblokken (ook het geneste in "Uitgelicht") zijn Astro-eilanden; de rest is statische HTML.
+		await expect(page.locator('astro-island')).toHaveCount(2);
+		await expect(page.locator('astro-island .quote-block')).toHaveCount(2);
+		await expect(page.locator('.callout-block astro-island .quote-block')).toHaveCount(1);
+		const copy = page.getByRole('button', { name: 'Kopieer citaat' }).first();
 		await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 		await copy.click();
 		await expect(page.getByRole('button', { name: 'Gekopieerd!' })).toBeVisible();

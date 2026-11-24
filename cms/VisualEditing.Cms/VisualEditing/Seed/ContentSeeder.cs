@@ -64,6 +64,11 @@ public sealed class ContentSeeder : INotificationAsyncHandler<UmbracoApplication
 
         if (_contentService.GetById(SeedKeys.Home) is not null)
         {
+            if (_contentTypeService.Get(SeedKeys.CalloutBlockType) is null)
+            {
+                _logger.LogWarning("Visual Editing seed: de database is van een oudere seed (zonder geneste blocks). Stop de site en verwijder umbraco/Data/Umbraco.sqlite.db* om opnieuw te seeden.");
+            }
+
             _logger.LogInformation("Visual Editing seed: content bestaat al, overslaan.");
             return;
         }
@@ -76,7 +81,10 @@ public sealed class ContentSeeder : INotificationAsyncHandler<UmbracoApplication
 
         IContentType textBlock = await EnsureElementType(SeedKeys.TextBlockType, "textBlock", "Tekstblok", "icon-text", ("heading", "Kop", textBox), ("text", "Tekst", textArea));
         IContentType quoteBlock = await EnsureElementType(SeedKeys.QuoteBlockType, "quoteBlock", "Citaat", "icon-quote", ("quote", "Citaat", textArea), ("author", "Auteur", textBox));
-        IDataType blockList = await EnsureBlockList(textBlock, quoteBlock);
+        // Geneste blocks: "Uitgelicht" heeft een eigen Block List (items) met tekstblokken en citaten.
+        IDataType nestedBlockList = await EnsureBlockList(SeedKeys.NestedBlockListDataType, "Uitgelicht - Blocks", textBlock, quoteBlock);
+        IContentType calloutBlock = await EnsureElementType(SeedKeys.CalloutBlockType, "calloutBlock", "Uitgelicht", "icon-star", ("title", "Titel", textBox), ("items", "Items", nestedBlockList));
+        IDataType blockList = await EnsureBlockList(SeedKeys.BlockListDataType, "Artikel - Blocks", textBlock, quoteBlock, calloutBlock);
 
         IContentType article = await EnsureArticleType(textBox, textArea, imagePicker, blockList);
         IContentType home = await EnsureHomeType(textBox, textArea, article);
@@ -96,7 +104,10 @@ public sealed class ContentSeeder : INotificationAsyncHandler<UmbracoApplication
             Text("Eigen componenten", Lorem(4)),
             Quote("Wie de componenten beheert, beheert ook de edit-metadata.", "Ada de Redacteur"),
             Text("Preview in de backoffice", Lorem(4)),
-            Text("Wat dit oplevert", Lorem(4)));
+            Text("Wat dit oplevert", Lorem(4)),
+            Callout("Verdieping: blocks in blocks",
+                Text("Een block in een block", Lorem(1)),
+                Quote("Ook een citaat in een kader is met één klik te bewerken.", "Nina Nest")));
 
         CreateArticle(homeDoc, SeedKeys.ArticleB, 2, "Componenten als contract", "Componenten als contract",
             "Elke Vue-component rendert zijn eigen data-attributen, alleen in edit-modus.", media[1],
@@ -149,32 +160,51 @@ public sealed class ContentSeeder : INotificationAsyncHandler<UmbracoApplication
     private static Dictionary<string, object?> Quote(string quote, string author) =>
         new() { ["$type"] = SeedKeys.QuoteBlockType, ["quote"] = quote, ["author"] = author };
 
+    private static Dictionary<string, object?> Callout(string title, params Dictionary<string, object?>[] items) =>
+        new() { ["$type"] = SeedKeys.CalloutBlockType, ["title"] = title, ["items"] = items };
+
     /// <summary>Block List-waarde in het v15+-formaat: layout, contentData, settingsData en expose.</summary>
-    private static string BlockListValue(int article, Dictionary<string, object?>[] blocks)
+    private static string BlockListValue(int article, Dictionary<string, object?>[] blocks) =>
+        JsonSerializer.Serialize(BlockListObject(i => SeedKeys.Block(article, i), (parent, i) => SeedKeys.NestedBlock(article, parent, i), blocks));
+
+    /// <summary>
+    /// Een geneste Block List (een waarde die zelf een rij blocks is) wordt als object in de waarde van het
+    /// ouder-block opgenomen, met keys via <paramref name="nestedKey"/> (één niveau diep in de seed).
+    /// </summary>
+    private static Dictionary<string, object> BlockListObject(Func<int, Guid> keyOf, Func<int, int, Guid>? nestedKey, Dictionary<string, object?>[] blocks)
     {
         var layout = new List<object>();
         var contentData = new List<object>();
         var expose = new List<object>();
         for (var i = 0; i < blocks.Length; i++)
         {
-            Guid key = SeedKeys.Block(article, i);
+            Guid key = keyOf(i);
+            var parentIndex = i;
             layout.Add(new { contentKey = key });
             contentData.Add(new
             {
                 contentTypeKey = (Guid)blocks[i]["$type"]!,
                 key,
-                values = blocks[i].Where(kv => kv.Key != "$type").Select(kv => new { alias = kv.Key, value = kv.Value, culture = (string?)null, segment = (string?)null }).ToArray(),
+                values = blocks[i].Where(kv => kv.Key != "$type").Select(kv => new
+                {
+                    alias = kv.Key,
+                    value = kv.Value is Dictionary<string, object?>[] nested && nestedKey is not null
+                        ? (object?)BlockListObject(n => nestedKey(parentIndex, n), null, nested)
+                        : kv.Value,
+                    culture = (string?)null,
+                    segment = (string?)null,
+                }).ToArray(),
             });
             expose.Add(new { contentKey = key, culture = (string?)null, segment = (string?)null });
         }
 
-        return JsonSerializer.Serialize(new Dictionary<string, object>
+        return new Dictionary<string, object>
         {
             ["layout"] = new Dictionary<string, object> { [Constants.PropertyEditors.Aliases.BlockList] = layout },
             ["contentData"] = contentData,
             ["settingsData"] = Array.Empty<object>(),
             ["expose"] = expose,
-        });
+        };
     }
 
     private static string Lorem(int sentences)
@@ -269,9 +299,9 @@ public sealed class ContentSeeder : INotificationAsyncHandler<UmbracoApplication
         }
     }
 
-    private async Task<IDataType> EnsureBlockList(IContentType textBlock, IContentType quoteBlock)
+    private async Task<IDataType> EnsureBlockList(Guid key, string name, params IContentType[] elementTypes)
     {
-        if (await _dataTypeService.GetAsync(SeedKeys.BlockListDataType) is { } existing)
+        if (await _dataTypeService.GetAsync(key) is { } existing)
         {
             return existing;
         }
@@ -281,16 +311,16 @@ public sealed class ContentSeeder : INotificationAsyncHandler<UmbracoApplication
 
         var dataType = new DataType(editor, _configSerializer)
         {
-            Key = SeedKeys.BlockListDataType,
-            Name = "Artikel - Blocks",
+            Key = key,
+            Name = name,
             EditorUiAlias = "Umb.PropertyEditorUi.BlockList",
             ConfigurationData = new Dictionary<string, object>
             {
-                ["blocks"] = new object[]
+                ["blocks"] = elementTypes.Select(t => (object)new Dictionary<string, object>
                 {
-                    new Dictionary<string, object> { ["contentElementTypeKey"] = textBlock.Key, ["label"] = "Tekstblok: {umbValue: heading}" },
-                    new Dictionary<string, object> { ["contentElementTypeKey"] = quoteBlock.Key, ["label"] = "Citaat: {umbValue: author}" },
-                },
+                    ["contentElementTypeKey"] = t.Key,
+                    ["label"] = BlockLabels.TryGetValue(t.Alias, out var label) ? label : t.Name ?? t.Alias,
+                }).ToArray(),
             },
         };
 
@@ -302,6 +332,13 @@ public sealed class ContentSeeder : INotificationAsyncHandler<UmbracoApplication
 
         return result.Result!;
     }
+
+    private static readonly Dictionary<string, string> BlockLabels = new()
+    {
+        ["textBlock"] = "Tekstblok: {umbValue: heading}",
+        ["quoteBlock"] = "Citaat: {umbValue: author}",
+        ["calloutBlock"] = "Uitgelicht: {umbValue: title}",
+    };
 
     private void CopyAssets()
     {

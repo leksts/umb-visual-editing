@@ -11,6 +11,8 @@ import { documentViewUrl, focused, login } from '../support/backoffice';
 const A = KEYS.articleA;
 const B = KEYS.articleB;
 const QUOTE = KEYS.block(1, 2);
+const CALLOUT = KEYS.block(1, 5);
+const NESTED_QUOTE = KEYS.nestedBlock(1, 5, 1);
 const ORIGINAL_TITLE = 'Waarom headless?';
 
 const view = (page: Page) => page.locator('visual-editing-workspace-view');
@@ -81,6 +83,25 @@ test.describe('fase 4: visual editing in de backoffice', () => {
 		await titleInput(page).fill(ORIGINAL_TITLE);
 		await page.getByRole('button', { name: /^(save|opslaan)$/i }).click();
 		await expect(frame.locator('h1')).toHaveText(ORIGINAL_TITLE, { timeout: 20_000 });
+	});
+
+	test('klik op de auteur van een genest citaat → beide blocks open, focus op het veld', async ({ page }) => {
+		await page.goto(documentViewUrl(A, 'visual-editing'));
+		await expect(ready(page)).toBeVisible({ timeout: 30_000 });
+		const frame = preview(page);
+
+		await frame.locator(`[data-umb-block="${NESTED_QUOTE}"] figcaption`).click();
+		// Eerst het Uitgelicht-block, daarin het geneste citaat: twee modals boven elkaar.
+		await expect(page).toHaveURL(new RegExp(`/block/edit/${CALLOUT}/.*/block/edit/${NESTED_QUOTE}/`));
+		await expectFocus(page, 'author', 'Nina Nest');
+		await expect(html(page)).toHaveAttribute('data-visual-editing-focus-block-path', `${CALLOUT}/${NESTED_QUOTE}`);
+		await closeModals(page);
+
+		// Daarna nog een veld van het Uitgelicht-block zelf (eerste niveau).
+		await frame.locator(`[data-umb-block="${CALLOUT}"] > h2`).click();
+		await expect(page).toHaveURL(new RegExp(`/block/edit/${CALLOUT}/`));
+		await expectFocus(page, 'title', 'Verdieping: blocks in blocks');
+		await closeModals(page);
 	});
 
 	test('klik op een artikelkaart (link) op home → artikel in een modal, preview blijft op home', async ({ page }) => {

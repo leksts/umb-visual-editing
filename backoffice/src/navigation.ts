@@ -1,5 +1,6 @@
 import { encodeFolderName } from '@umbraco-cms/backoffice/router';
 import type { UmbDocumentWorkspaceContext } from '@umbraco-cms/backoffice/document';
+import type { BlockPathStep } from '../../shared/protocol';
 
 /**
  * Navigatie binnen de backoffice naar tab, property, block en veld.
@@ -19,6 +20,8 @@ export interface EditTarget {
 	propertyAlias: string | null;
 	blockKey: string | null;
 	blockPropertyAlias: string | null;
+	/** Bij geneste blocks: pad van buiten naar binnen (eerste stap = property op het document, laatste = blockKey). */
+	blockPath?: BlockPathStep[] | null;
 }
 
 /** Tabsegment ("tab/inhoud" of "root") voor een property, op basis van de structuur van het documenttype. */
@@ -84,7 +87,8 @@ async function waitFor<T>(find: () => T | null, timeoutMs = 5000): Promise<T | n
  * - property op het document: `umb-property` met die alias. Staat hij niet op de zichtbare tab en is `tryTabs` aan,
  *   dan worden de tabs van die editor één voor één geopend (hun eigen links).
  * - veld in een block: het block-item in de Block List-property, geopend via zijn eigen edit-link (dezelfde routed
- *   modal als een klik op het item), en daarin de property van het block.
+ *   modal als een klik op het item), en daarin de property van het block. Bij een genest block (`blockPath`) gebeurt
+ *   dat per niveau: in elk geopend modal de volgende Block List-property, tot en met het binnenste block.
  * Geeft het gefocuste element terug, of null.
  */
 export async function focusTarget(
@@ -117,25 +121,47 @@ export async function focusTarget(
 		return property;
 	}
 
-	const entry = await waitFor(() => deepQuery<HTMLElement>(property!, isBlockEntry(target.blockKey!)));
-	if (!entry) {
-		await focusField(property);
-		markFocus(target);
-		return property;
-	}
-	entry.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior });
+	// Pad van blocks: bij een genest block meerdere stappen (blocks[5] → items[1]), anders één.
+	const path: BlockPathStep[] =
+		target.blockPath && target.blockPath.length > 0
+			? target.blockPath
+			: [{ propertyAlias: target.propertyAlias, blockKey: target.blockKey }];
 
-	const field = target.blockPropertyAlias ? await openBlockAndFind(entry, target.blockPropertyAlias) : null;
-	if (field) {
-		await focusField(field);
-	} else {
-		highlight(entry);
+	// `container` is steeds de Block List-property waarin het volgende block staat: eerst die op het document, daarna
+	// die in het zojuist geopende block-modal.
+	let container: HTMLElement = property;
+	for (let i = 0; i < path.length; i++) {
+		const last = i === path.length - 1;
+		const entry = await waitFor(() => deepQuery<HTMLElement>(container, isBlockEntry(path[i].blockKey)));
+		if (!entry) {
+			await focusField(container);
+			markFocus(target);
+			return container;
+		}
+		entry.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior });
+
+		// In het modal van dit block zoeken we de volgende Block List-property, of (laatste stap) het veld zelf.
+		const next = last ? target.blockPropertyAlias : path[i + 1].propertyAlias;
+		const found = next ? await openBlockAndFind(entry, next) : null;
+		if (!found) {
+			highlight(entry);
+			markFocus(target);
+			return entry;
+		}
+		if (last) {
+			await focusField(found);
+			markFocus(target);
+			return found;
+		}
+		container = found;
 	}
-	markFocus(target);
-	return field ?? entry;
+	return null;
 }
 
-/** Opent het block via de edit-link van het item en zoekt daarna de property in het geopende modal. */
+/**
+ * Opent het block via de edit-link van het item en zoekt daarna de property in het nieuw geopende modal (niet in een
+ * modal dat al open was: bij geneste blocks ligt het modal van het ouder-block eronder).
+ */
 async function openBlockAndFind(entry: HTMLElement, blockPropertyAlias: string): Promise<HTMLElement | null> {
 	// De link wordt per route opgebouwd. Direct na een tab-navigatie kan hij nog bij de vorige route horen, en een
 	// navigatie die tijdens het verwerken van de vorige wordt gestart, draait de router terug. Daarom: wachten tot de
@@ -147,9 +173,10 @@ async function openBlockAndFind(entry: HTMLElement, blockPropertyAlias: string):
 			return path && path.startsWith(`${location.pathname.replace(/\/$/, '')}/`) ? path : null;
 		}, 3000);
 		if (!href) return null;
+		const before = topModal();
 		await new Promise((r) => requestAnimationFrame(r));
 		navigate(href);
-		const field = await findInModal(blockPropertyAlias, 3000);
+		const field = await findInModal(blockPropertyAlias, 3000, before);
 		if (field) return field;
 	}
 	return null;
@@ -158,11 +185,11 @@ async function openBlockAndFind(entry: HTMLElement, blockPropertyAlias: string):
 /** Het bovenste open modal (block- of document-workspace) als zoekgebied. */
 export const modalScope = (): ParentNode | null => topModal();
 
-/** Zoekt een property in het bovenste open modal. */
-async function findInModal(propertyAlias: string, timeoutMs = 5000): Promise<HTMLElement | null> {
+/** Zoekt een property in het bovenste open modal, zodra dat een ander modal is dan `notIn`. */
+async function findInModal(propertyAlias: string, timeoutMs = 5000, notIn: Element | null = null): Promise<HTMLElement | null> {
 	return waitFor(() => {
 		const modal = topModal();
-		return modal ? deepQuery<HTMLElement>(modal, isProperty(propertyAlias)) : null;
+		return modal && modal !== notIn ? deepQuery<HTMLElement>(modal, isProperty(propertyAlias)) : null;
 	}, timeoutMs);
 }
 
@@ -217,6 +244,7 @@ function markFocus(target: EditTarget) {
 	d.visualEditingFocusProperty = target.propertyAlias ?? '';
 	d.visualEditingFocusBlock = target.blockKey ?? '';
 	d.visualEditingFocusBlockProperty = target.blockPropertyAlias ?? '';
+	d.visualEditingFocusBlockPath = target.blockPath ? target.blockPath.map((s) => s.blockKey).join('/') : '';
 }
 
 function highlight(element: HTMLElement) {

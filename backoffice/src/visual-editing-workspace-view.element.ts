@@ -159,6 +159,7 @@ export class VisualEditingWorkspaceViewElement extends UmbLitElement implements 
 			propertyAlias: message.propertyAlias,
 			blockKey: message.blockKey,
 			blockPropertyAlias: message.blockPropertyAlias,
+			blockPath: message.blockPath ?? null,
 		};
 		this.dispatchEvent(new CustomEvent('visual-editing-edit', { detail: target, bubbles: true, composed: true }));
 		if (!target.propertyAlias) return;

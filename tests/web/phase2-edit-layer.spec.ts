@@ -17,6 +17,8 @@ import {
 const A = KEYS.articleA;
 const QUOTE = KEYS.block(1, 2);
 const TEXT0 = KEYS.block(1, 0);
+const CALLOUT = KEYS.block(1, 5);
+const NESTED_QUOTE = KEYS.nestedBlock(1, 5, 1);
 
 test.describe('fase 2: zonder edit-modus', () => {
 	for (const [name, url] of [
@@ -36,7 +38,9 @@ test.describe('fase 2: zonder edit-modus', () => {
 			);
 			expect(hasEditScript).toBe(false);
 			// Ook het gehydrateerde component krijgt geen edit-descriptor in zijn props.
-			expect(await page.locator('astro-island').getAttribute('props')).not.toContain('documentKey');
+			for (const props of await page.locator('astro-island').evaluateAll((els) => els.map((e) => e.getAttribute('props')))) {
+				expect(props).not.toContain('documentKey');
+			}
 		});
 	}
 });
@@ -90,7 +94,7 @@ test.describe('fase 2: met edit-modus (nep-parent)', () => {
 		expect(await hoverAndGetOverlayLabel(frame, '.quote-block blockquote')).toMatch(/›/);
 		// De overlay ligt precies over het element.
 		const box = await frame.locator('umb-ve-overlay .box').boundingBox();
-		const target = await frame.locator('.quote-block blockquote').boundingBox();
+		const target = await frame.locator(`[data-umb-block="${QUOTE}"] blockquote`).boundingBox();
 		expect(Math.abs(box!.y - target!.y)).toBeLessThan(2);
 		expect(Math.abs(box!.width - target!.width)).toBeLessThan(2);
 	});
@@ -132,10 +136,10 @@ test.describe('fase 2: met edit-modus (nep-parent)', () => {
 	test('gehydrateerd block (Citaat): klik werkt, ook na re-renders', async ({ page }) => {
 		const { frame } = await openHarness(page);
 		await waitForReady(page);
-		const quote = frame.locator('astro-island .quote-block');
+		const quote = frame.locator(`astro-island .quote-block[data-umb-block="${QUOTE}"]`);
 		await expect(quote).toHaveCount(1);
 		// Wachten tot het eiland gehydrateerd is (Astro verwijdert dan het ssr-attribuut).
-		await expect(frame.locator('astro-island')).not.toHaveAttribute('ssr', /.*/);
+		await expect(quote.locator('xpath=ancestor::astro-island')).not.toHaveAttribute('ssr', /.*/);
 
 		await quote.locator('blockquote').click();
 		expect(await lastEdit(page)).toMatchObject({
@@ -161,7 +165,45 @@ test.describe('fase 2: met edit-modus (nep-parent)', () => {
 		await expect(quote.locator('figcaption')).toHaveAttribute('data-umb-block-prop', 'author');
 		expect(await hoverAndGetOverlayLabel(frame, '.quote-block figcaption')).toMatch(/auteur|author/i);
 		await quote.locator('figcaption').click();
-		expect(await lastEdit(page, before)).toMatchObject({ blockKey: QUOTE, blockPropertyAlias: 'author' });
+		const top = await lastEdit(page, before);
+		expect(top).toMatchObject({ blockKey: QUOTE, blockPropertyAlias: 'author' });
+		// Block op het eerste niveau: geen pad (protocol en attributen zoals voorheen).
+		expect(top).not.toHaveProperty('blockPath');
+		await expect(quote).not.toHaveAttribute('data-umb-block-path', /.*/);
+	});
+
+	test('genest block (citaat in Uitgelicht): klik stuurt het pad van blocks mee', async ({ page }) => {
+		const { frame } = await openHarness(page);
+		await waitForReady(page);
+		const callout = frame.locator(`.callout-block[data-umb-block="${CALLOUT}"]`);
+		const nested = callout.locator(`.quote-block[data-umb-block="${NESTED_QUOTE}"]`);
+		await expect(nested).toHaveAttribute('data-umb-block-path', `blocks/${CALLOUT}/items/${NESTED_QUOTE}`);
+		await expect(nested.locator('xpath=ancestor::astro-island')).not.toHaveAttribute('ssr', /.*/);
+
+		// Het binnenste element wint: de auteur van het geneste citaat, niet het Uitgelicht-block eromheen.
+		expect(await hoverAndGetOverlayLabel(frame, `[data-umb-block="${NESTED_QUOTE}"] figcaption`)).toMatch(
+			/Uitgelicht 6 › Citaat 2 › (Auteur|Author)/,
+		);
+		const before = await editCount(page);
+		await nested.locator('figcaption').click();
+		expect(await lastEdit(page, before)).toEqual(
+			expect.objectContaining({
+				documentKey: A,
+				propertyAlias: 'blocks',
+				blockKey: NESTED_QUOTE,
+				blockPropertyAlias: 'author',
+				blockPath: [
+					{ propertyAlias: 'blocks', blockKey: CALLOUT },
+					{ propertyAlias: 'items', blockKey: NESTED_QUOTE },
+				],
+			}),
+		);
+
+		// De titel van het Uitgelicht-block zelf: een veld van het block op het eerste niveau.
+		await callout.locator('h2').first().click();
+		const title = await lastEdit(page, before + 1);
+		expect(title).toMatchObject({ propertyAlias: 'blocks', blockKey: CALLOUT, blockPropertyAlias: 'title' });
+		expect(title).not.toHaveProperty('blockPath');
 	});
 
 	test('MutationObserver: dynamisch toegevoegde elementen worden herkend', async ({ page }) => {

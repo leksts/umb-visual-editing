@@ -215,11 +215,34 @@ export async function focusField(property: HTMLElement) {
 		input ?? deepQuery<HTMLElement>(property, (el) => el.localName === 'button' || el.localName === 'uui-button');
 	if (!focusable) return;
 	focusable.focus({ preventScroll: true });
-	// Een net geopend workspace-modal zet zelf nog de focus op het naamveld. Houd de focus kort vast.
-	for (let i = 0; i < 8; i++) {
-		await new Promise((r) => setTimeout(r, 125));
+	guardFocus(property, focusable);
+}
+
+/**
+ * Een net geopend workspace-modal zet zelf nog de focus op het naamveld van het document, soms pas na meer dan een
+ * seconde. Wie dan al typt, typt in de naam (gezien in de e2e-test). Daarom: een paar seconden lang de focus direct
+ * terugzetten zodra die ongevraagd weggaat. Zelf klikken, Tab of Escape beëindigt de bewaking meteen.
+ */
+function guardFocus(property: HTMLElement, focusable: HTMLElement, durationMs = 4000) {
+	const restore = () => {
+		if (!focusable.isConnected) return stop();
 		if (!containsDeep(property, deepActiveElement())) focusable.focus({ preventScroll: true });
+	};
+	const onKey = (e: KeyboardEvent) => {
+		if (e.key === 'Tab' || e.key === 'Escape') stop();
+	};
+	const timer = setInterval(restore, 100);
+	const end = setTimeout(() => stop(), durationMs);
+	function stop() {
+		clearInterval(timer);
+		clearTimeout(end);
+		document.removeEventListener('focusin', restore, true);
+		document.removeEventListener('pointerdown', stop, true);
+		document.removeEventListener('keydown', onKey, true);
 	}
+	document.addEventListener('focusin', restore, true);
+	document.addEventListener('pointerdown', stop, true);
+	document.addEventListener('keydown', onKey, true);
 }
 
 function deepActiveElement(): Element | null {

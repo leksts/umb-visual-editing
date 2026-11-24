@@ -60,9 +60,8 @@ test.describe('fase 2: met edit-modus (nep-parent)', () => {
 		await openHarness(page, { target: '/' });
 		await waitForReady(page);
 		const ready = (await messages(page)).find((m) => m.data.type === 'ready')!;
-		expect(new Set(ready.data.documentKeys as string[])).toEqual(
-			new Set([KEYS.home, KEYS.articleA, KEYS.articleB, KEYS.articleC]),
-		);
+		// Minstens de seed-documenten (eigen concept-artikelen onder Home staan er in preview ook bij).
+		expect(ready.data.documentKeys).toEqual(expect.arrayContaining([KEYS.home, KEYS.articleA, KEYS.articleB, KEYS.articleC]));
 	});
 
 	test('klik op een link in edit-modus volgt de link niet, maar stuurt "edit"', async ({ page }) => {

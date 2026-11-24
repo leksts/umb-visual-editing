@@ -139,7 +139,10 @@ Elke beslissing: wat, waarom, alternatieven, bron. Bronpaden verwijzen naar de U
     (door shadow roots heen; er wordt gewacht tot de lui geladen editor er is).
   - Veld in een block: het `umb-block-list-entry` (`.contentKey`) wordt geopend via **zijn eigen edit-link** (dezelfde
     routed modal als een klik op het item). In dat modal krijgt de property van het block focus (bv. `author`).
-  - Een net geopend modal zet zelf nog de focus op het naamveld. De focus wordt daarom ~1 s vastgehouden.
+  - Een net geopend modal zet zelf nog de focus op het naamveld, soms pas na meer dan een seconde. Eerst werd de focus
+    ~1 s vastgehouden; dat was te kort (de e2e-test typte daardoor in de documentnaam). Nu bewaakt `guardFocus` de focus
+    4 s lang en zet die direct terug (op `focusin`) zodra hij ongevraagd weggaat. Zelf klikken, Tab of Escape stopt de
+    bewaking meteen.
 - **Waarom**: de eerste versie markeerde alleen de Block List-property ("het hele blocks-object"). De redacteur wil
   direct in het juiste veld uitkomen. Er is geen publieke API om een block te openen of een property te focussen. De
   DOM-afhankelijkheid zit in één bestand (`backoffice/src/navigation.ts`).
@@ -181,6 +184,40 @@ Elke beslissing: wat, waarom, alternatieven, bron. Bronpaden verwijzen naar de U
   backoffice (die heeft de metadata niet).
 - **Bron**: spike in de draaiende backoffice 18.3.2: de edit-link van een genest item valt onder de route van het
   ouder-modal (`…/block/edit/{ouder}/…/block/edit/{kind}/…`), dus dezelfde wachtregel als bij D16 werkt.
+
+## D20 – Nooit-gepubliceerde documenten: route `/preview-{key}/` met schuine streep opvragen
+- **Probleem**: de preview van een document dat nog nooit is gepubliceerd gaf "Niet gevonden". De Delivery API geeft
+  zo'n document in preview de tijdelijke route `/preview-{key}/`. De frontend haalde bij het opvragen op route de
+  schuine streep vooraan weg, en zonder die streep geeft de API 404.
+- **Wat**: `getContentByRoute` stuurt alleen voor routes van precies die vorm (`/preview-` + GUID) het pad mét
+  gecodeerde streep (`%2Fpreview-{key}%2F`). Alle andere routes gaan zoals voorheen zonder streep.
+- **Waarom niet altijd met streep**: dan wordt elk pad dat met `/preview-` begint als zo'n tijdelijke route opgevat. De
+  gewone pagina `/preview-zonder-cookies/` gaf dan 404 (gezien in de tests).
+- **Bron**: spike tegen de draaiende Delivery API (18.3.2): `preview-{key}/` → 404, `%2Fpreview-{key}%2F` → 200,
+  `%2Fpreview-zonder-cookies%2F` → 404, en zonder `Preview`-header ook 404 (dus niets zichtbaar in de gepubliceerde API).
+
+## D21 – Knop "Update & save" in block-modals
+- **Probleem**: bij geneste blocks staan meerdere block-modals open. Een wijziging komt pas in het document na
+  **Update** per modal, en de Save-knop van het document zit achter de modals: Update, Update, Save. Sluiten zonder
+  Update (Escape, routewissel) vraagt "Discard unsaved changes" (spike: block-wijzigingen zijn niet live).
+- **Wat**: een eigen `workspaceAction` (publiek extensiepunt, conditie `Umb.Workspace.Block`) naast Update. Die doet
+  `requestSubmit()` op elk open block van binnen naar buiten (precies wat Update doet: valideren, de waarde naar het
+  ouder-block schrijven, modal sluiten) en daarna `requestSave()` op het document (precies wat Save doet). De preview
+  herlaadt daarna vanzelf (D17).
+  - Het ouder-block wordt gevonden met een `UmbContextConsumer` met `skipHost()` vanaf het block-workspace: modals
+    erven de contexten van het element dat ze opende. Losse consumers moeten zelf `request()` aanroepen.
+  - Het document-workspace heeft dezelfde context-alias als het block-workspace; zonder `passContextAliasMatches()`
+    wordt het niet gevonden (de knop bleef dan uitgeschakeld). Buiten een document blijft de knop uitgeschakeld.
+  - Na elke submit wordt gewacht tot de data van het ouder-block (of het document) echt is bijgewerkt: dat gebeurt
+    asynchroon via de property-editor. Zonder wachten werd de oude waarde opgeslagen (gezien in de spike).
+  - Faalt de validatie van een block, dan stopt de reeks en blijft dat modal open met de meldingen.
+- **Alternatieven**: inline-modus van de Block List (geen modals; getest en werkend, maar geldt voor alle redacteuren
+  en vraagt aanpassing van de navigatie); alle modals sluiten via de route (gooit wijzigingen weg).
+- **Bekend**: `getHasUnpersistedChanges()` van Umbraco logt een console-waarschuwing ("Changes detected based on JSON
+  comparison …") per block. Onschuldig.
+- **Bron**: `block/workspace/manifests.js` (Update = `UmbSubmitWorkspaceAction` → `requestSubmit`),
+  `block-workspace.context.js` (`submit`), `submittable-workspace-context-base.js`, `content-detail-workspace-base.js`
+  (`requestSave`), `context-consumer.js` (`skipHost`, `request`, `asPromise`).
 
 ## D17 – Herladen na opslaan: `UmbEntityUpdatedEvent` op de action-event-context
 - **Wat**: de view luistert via `UMB_ACTION_EVENT_CONTEXT` naar `UmbEntityUpdatedEvent.TYPE` voor de eigen `unique`.

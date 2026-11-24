@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { KEYS } from '../support/env';
-import { documentViewUrl, focused, login } from '../support/backoffice';
+import { documentViewUrl, focused, login, managementApi } from '../support/backoffice';
 
 /**
  * Fase 4: end-to-end door de echte backoffice heen.
@@ -102,6 +102,54 @@ test.describe('fase 4: visual editing in de backoffice', () => {
 		await expect(page).toHaveURL(new RegExp(`/block/edit/${CALLOUT}/`));
 		await expectFocus(page, 'title', 'Verdieping: blocks in blocks');
 		await closeModals(page);
+	});
+
+	test('"Update & save" in een genest block: alle blocks bijgewerkt en het document opgeslagen in één klik', async ({ page }) => {
+		await page.goto(documentViewUrl(A, 'visual-editing'));
+		await expect(ready(page)).toBeVisible({ timeout: 30_000 });
+		const frame = preview(page);
+		const author = frame.locator(`[data-umb-block="${NESTED_QUOTE}"] figcaption`);
+		const updateAndSave = () => modal(page).getByRole('button', { name: 'Update & save' });
+
+		for (const value of [`Nina Nest (bewerkt ${Date.now()})`, 'Nina Nest']) {
+			await author.click();
+			await expectFocus(page, 'author');
+			await expect(page.locator('umb-workspace-modal')).toHaveCount(2);
+			await page.keyboard.press('Control+A');
+			await page.keyboard.type(value);
+			await expectFocus(page, 'author', value);
+			await updateAndSave().click();
+			// Beide modals dicht (geen "Discard unsaved changes"), document opgeslagen, preview herladen.
+			await expect(page.locator('umb-workspace-modal')).toHaveCount(0);
+			await expect(page.locator('uui-dialog-layout')).toHaveCount(0);
+			await expect(author).toHaveText(`— ${value}`, { timeout: 20_000 });
+		}
+	});
+
+	test('nooit gepubliceerd document: de preview toont het concept', async ({ page }) => {
+		const key = '5e0d0000-0000-4000-8000-0000000009e2';
+		const title = 'Concept zonder publicatie';
+		await managementApi(page, 'DELETE', `/document/${key}`); // restant van een afgebroken run
+		const created = await managementApi(page, 'POST', '/document', {
+			id: key,
+			parent: { id: KEYS.home },
+			documentType: { id: '5e0d0000-0000-4000-8000-000000000002' },
+			template: null,
+			values: [{ alias: 'title', value: title, culture: null, segment: null }],
+			variants: [{ name: title, culture: null, segment: null }],
+		});
+		expect(created.status).toBe(201);
+		try {
+			await page.goto(documentViewUrl(key, 'visual-editing'));
+			await expect(ready(page)).toBeVisible({ timeout: 30_000 });
+			// Umbraco geeft het concept in preview de tijdelijke route /preview-{key}/.
+			expect(await preview(page).locator('body').evaluate(() => location.pathname)).toBe(`/preview-${key}/`);
+			await expect(preview(page).locator('h1')).toHaveText(title);
+			await preview(page).locator('h1').click();
+			await expectFocus(page, 'title', title);
+		} finally {
+			expect((await managementApi(page, 'DELETE', `/document/${key}`)).status).toBe(200);
+		}
 	});
 
 	test('klik op een artikelkaart (link) op home → artikel in een modal, preview blijft op home', async ({ page }) => {

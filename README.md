@@ -54,7 +54,10 @@ blocks wordt niet bijgewerkt (de CMS logt dan een waarschuwing): verwijder hem e
    tab en het veld krijgt focus. Bij een veld in een block (bijvoorbeeld de auteur van een citaat) opent het block en
    krijgt dát veld focus, ook in een block binnen een block (het citaat in "Uitgelicht"). Een element van een ander document (zoals een artikelkaart op de homepage, ook als het een
    link is) opent dat document in een modal; de preview blijft staan en ververst na opslaan.
-4. Wijzig iets en klik **Save**: de preview herlaadt op dezelfde scrollpositie.
+4. Wijzig iets en klik **Save**: de preview herlaadt op dezelfde scrollpositie. In een block (ook genest) kan dat in
+   één klik met **Update & save**: alle open blocks worden bijgewerkt en het document wordt opgeslagen.
+
+Ook nooit-gepubliceerde documenten hebben een preview (Umbraco geeft ze de route `/preview-{key}/`).
 
 Via **Save and preview ▸ Frontend (Astro)** opent de frontend-preview in een nieuw venster (zonder edit-modus).
 

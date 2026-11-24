@@ -38,4 +38,19 @@ export const manifests: Array<UmbExtensionManifest> = [
 			urlProviderAlias: 'FrontendPreview',
 		},
 	} as UmbExtensionManifest,
+	{
+		// Bron: docs 18.latest, extension-types/workspaces/workspace-editor-actions; block/workspace/manifests.js
+		// (Umb.WorkspaceAction.Block.SubmitUpdate gebruikt dezelfde workspace-conditie).
+		type: 'workspaceAction',
+		kind: 'default',
+		alias: 'VisualEditing.WorkspaceAction.Block.UpdateAndSave',
+		name: 'Visual Editing: update block(s) and save document',
+		api: () => import('./update-and-save.action.js'),
+		weight: 10,
+		meta: {
+			label: 'Update & save',
+			look: 'secondary',
+		},
+		conditions: [{ alias: UMB_WORKSPACE_CONDITION_ALIAS, match: 'Umb.Workspace.Block' }],
+	},
 ];

@@ -1,7 +1,7 @@
 # FINDINGS
 
 Bevindingen uit de PoC "Visual Editing voor headless Umbraco 18" (Umbraco 18.3.2, Astro 7.4, Vue 3.5).
-Resultaat: alle vier de doelen werken lokaal en worden aangetoond met 46 geautomatiseerde tests (`npm test`).
+Resultaat: alle vier de doelen werken lokaal en worden aangetoond met 48 geautomatiseerde tests (`npm test`).
 
 ## Wat goed werkte
 
@@ -36,6 +36,10 @@ Resultaat: alle vier de doelen werken lokaal en worden aangetoond met 46 geautom
 - **postMessage vóór de handshake zonder `*`.** De frontend kent de parent-origin nog niet. We posten `loaded` naar elke
   origin uit de allowlist. De browser levert alleen af bij de juiste, maar logt voor de andere een console-waarschuwing
   ("target origin … does not match"). Dat is onschuldig, maar wel zichtbaar.
+- **Route van nooit-gepubliceerde documenten.** In preview is dat `/preview-{key}/`, en de Delivery API vindt die alleen
+  mét gecodeerde schuine streep vooraan; een gewone pagina die met `preview-` begint, juist alleen zónder (D20).
+- **Block-wijzigingen zijn niet live.** Pas na Update komen ze in het document, en de doorgifte naar het ouder-block is
+  asynchroon. Een knop die meerdere niveaus bijwerkt, moet daarop wachten (D21).
 - **Schijfruimte en Playwright-browserversies** op de ontwikkelmachine: niet inhoudelijk, wel tijdrovend.
 
 ## Wat niet kon in Umbraco 18, en de gekozen workaround
@@ -44,6 +48,7 @@ Resultaat: alle vier de doelen werken lokaal en worden aangetoond met 46 geautom
 |---|---|---|
 | Naar een specifieke property navigeren/focussen | Geen publieke API of route | Tab via de publieke structuur-API en tab-route; daarna `umb-property` (`.alias`) zoeken en het invoerveld in de (lui geladen) property-editor focussen, door shadow roots heen. Geïsoleerd in `backoffice/src/navigation.ts`. |
 | Een specifiek block openen en een veld erin focussen | Block-workspace-modal heeft geen stabiele publieke URL | Het `umb-block-list-entry` (`.contentKey`) openen via zijn eigen edit-link en in het modal de property van het block focussen. Wachten tot de link bij de huidige route hoort (anders draait de router de navigatie terug), en de focus kort vasthouden (het modal zet zelf focus op het naamveld). Geneste blocks: hetzelfde, stap voor stap per modal (D19). |
+| Geneste block-modals in één keer bijwerken en opslaan | Geen ingebouwde knop: per modal Update, daarna Save; sluiten zonder Update vraagt "Discard unsaved changes" | Eigen `workspaceAction` "Update & save" in de block-workspace, alleen publieke API (D21). |
 | Een ander document bewerken zonder de preview te verlaten | Kan, met publieke API | `UmbModalRouteRegistrationController` + `UMB_WORKSPACE_MODAL` (zoals de documentlijst); de preview herlaadt als een document op de pagina wordt opgeslagen (`documentKeys` in `ready`). |
 | Metadata per item via een subclass | Serialisatie via interface-type, geen polymorfisme | JSON-contract-modifier + `ConditionalWeakTable` (DECISIONS D2). |
 | Preview-cookies in een cross-site iframe | Third-party cookies (browserbeleid, niet Umbraco) | HMAC-token in de URL; Astro haalt server-side met de API-key op (D6). |
@@ -55,8 +60,11 @@ Er is geen afwijking van de vaste keuzes van de opdracht nodig geweest.
 
 - Edit-metadata alleen voor top-level items. Geneste content via `expand` en Element Picker-/Library-elementen (nieuw
   in v18, eigen entiteit en workspace) krijgen nog geen metadata. Block Grid is buiten scope.
-- Geneste Block Lists werken op elke diepte (getest met twee niveaus). Elk niveau opent een eigen modal; Escape sluit
+- Geneste Block Lists werken op elke diepte (getest met twee niveaus). Elk niveau opent een eigen modal. Met
+  **Update & save** worden alle open blocks bijgewerkt en wordt het document opgeslagen in één klik (D21); Escape sluit
   ze één voor één.
+- Nooit-gepubliceerde documenten hebben in preview de route `/preview-{key}/` (Umbraco). Kaarten op de homepage linken
+  daar ook naar. Een gewone pagina-URL die met `preview-` gevolgd door een GUID begint, zou hiermee botsen (D20).
 - `editMetadata.properties` bevat alle properties van het document, ook als `fields=` de output beperkt.
 - Alleen invariant content getest. `culture` zit wel in metadata, protocol en navigatie (`/{culture}/view/…`).
 - De e2e-test wijzigt de concepttitel van artikel A en zet die daarna terug. Gepubliceerde content wordt nooit aangeraakt.

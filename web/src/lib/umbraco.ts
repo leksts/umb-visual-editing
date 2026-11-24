@@ -45,8 +45,22 @@ async function get<T>(path: string, preview: PreviewContext): Promise<T | null> 
 	return (await res.json()) as T;
 }
 
+/** Tijdelijke route die Umbraco in preview geeft aan een nooit-gepubliceerd document. */
+const DRAFT_ROUTE = /^\/preview-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/i;
+
+/**
+ * Een nooit-gepubliceerd document heeft in preview de route `/preview-{key}/`. Die vindt de Delivery API alleen mét de
+ * schuine streep vooraan (gecodeerd als %2F); zonder geeft hij 404. Omgekeerd wordt elk pad dat met "/preview-" begint
+ * als zo'n route behandeld, dus een gewone pagina als `/preview-zonder-cookies/` moet juist zonder streep
+ * (DECISIONS.md D20).
+ */
 export function getContentByRoute(route: string, preview: PreviewContext) {
-	const path = route === '/' || route === '' ? '%2F' : route.replace(/^\//, '');
+	const path =
+		route === '/' || route === ''
+			? '%2F'
+			: DRAFT_ROUTE.test(route)
+				? encodeURIComponent(route)
+				: route.replace(/^\//, '');
 	return get<ApiContent>(`/content/item/${path}`, preview);
 }
 

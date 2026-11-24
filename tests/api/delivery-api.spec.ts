@@ -173,9 +173,11 @@ test.describe('fase 3: preview + edit-vlag', () => {
 
 	test('query-endpoint: elk item heeft zijn eigen metadata', async () => {
 		const body = JSON.parse((await current('preview-edit-query')).body);
-		const keys = body.items.map((i: any) => i.editMetadata.documentKey);
-		expect(keys).toEqual([KEYS.articleA, KEYS.articleB, KEYS.articleC]);
-		const b = body.items[1].editMetadata;
+		const keys: string[] = body.items.map((i: any) => i.editMetadata.documentKey);
+		// Alleen de seed-artikelen bekijken: eigen concept-artikelen onder Home staan in preview ook in de lijst.
+		const seed = [KEYS.articleA, KEYS.articleB, KEYS.articleC];
+		expect(keys.filter((k) => seed.includes(k))).toEqual(seed);
+		const b = body.items.find((i: any) => i.id === KEYS.articleB).editMetadata;
 		expect(Object.keys(b.blocks)).toEqual([KEYS.block(2, 0), KEYS.block(2, 1)]);
 	});
 });
